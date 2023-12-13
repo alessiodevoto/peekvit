@@ -157,8 +157,8 @@ def visualize_experts(run_dir):
 
 
 if __name__ == '__main__':
-    run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_13_11_07_02' #make_experiment_name() # if you just want to visualize some images, set this to the path of a run
-    # train(run_dir)
+    run_dir = make_experiment_name() # if you just want to visualize some images, set this to the path of a run
+    train(run_dir)
     visualize_predictions(run_dir)
     visualize_experts(run_dir)
 
