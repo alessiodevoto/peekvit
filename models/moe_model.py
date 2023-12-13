@@ -78,14 +78,17 @@ class MLPMoE(MoE):
       self.experts = nn.ModuleList([MLP(hidden_dim, mlp_dim) for _ in range(num_experts)])
       
     def forward_one(self, x):
-       return self.experts[0](x)
+      # if there is only one expert, just return its output without gating
+      return self.experts[0](x)
       
     def forward_moe(self, x):
 
       torch._assert(x.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {x.shape}")
 
-      self.gating_probs = self.gating_network(x)   # batch, seq, exp
+      # compute the gating probabilities
+      self.gating_probs = self.gating_network(x)   # batch, seq, exps
 
+      # iterate over the experts and compute their outputs, then stack them
       expert_outputs = [expert(x) for expert in self.experts]
       output = torch.stack(expert_outputs, dim=0)
       output = torch.einsum('ebsd, bse -> bsd', output, self.gating_probs)
@@ -110,13 +113,17 @@ class AttentionMoE(MoE):
 
 
     def forward_one(self, x):
-       return self.experts[0](x)
+      # if there is only one expert, just return its output without gating
+      return self.experts[0](x)
 
     def forward_moe(self, x):
 
       torch._assert(x.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {x.shape}")
+
+      # compute the gating probabilities
       self.gating_probs = self.gating_network(x)   # batch, seq, exp
 
+      # iterate over the experts and compute their outputs, then stack them
       expert_outputs = [expert(x) for expert in self.experts]
       output = torch.stack(expert_outputs, dim=0)
       output = torch.einsum('ebsd, bse -> bsd', output, self.gating_probs)
