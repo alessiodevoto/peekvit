@@ -8,6 +8,11 @@ from abc import ABC
 
 from .blocks import SelfAttention, MLP
 
+"""
+A Vision Transformer with Residual Gating which can be placed at any layer.
+The residual gating is implemented as a learnable vector for each token.
+"""
+
 class ResidualModule(ABC, nn.Module):
   pass
 
@@ -68,10 +73,12 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         attention_dropout,               
         )
         
-        self.residual_gate = nn.Linear(hidden_dim, 1)
-        self.temp = temp
-        self.threshold = 0.5
         self.residual = residual
+        if self.residual is True: 
+            self.residual_gate = nn.Linear(hidden_dim, 1)
+            self.temp = temp
+            self.threshold = 0.5
+       
     
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")

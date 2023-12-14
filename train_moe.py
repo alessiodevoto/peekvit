@@ -1,7 +1,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from .dataset import get_imagenette
+from peekvit.dataset import get_imagenette
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 from models.moevit import VisionTransformerMoE
@@ -9,7 +9,7 @@ import torch
 from tqdm import tqdm
 
 from os.path import join
-from utils import SimpleLogger, make_experiment_directory
+from utils import SimpleLogger, make_experiment_directory, save_state, load_state
 
 
 # PATHS 
@@ -34,28 +34,15 @@ model_args = {
         'mlp_dim': 128,
         'dropout': 0.1,
         'attention_dropout': 0.1,
-        'mlp_moes': [1,1,1,1],
-        'attn_moes': [1,1,1,4]
+        'mlp_moes': [1,1,1,2],
+        'attn_moes': [1,1,1,1]
     }
 
 
 
 def train(run_dir):
 
-    train_transform = T.Compose([
-        T.RandomResizedCrop(160),
-        T.RandomHorizontalFlip(),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    test_transform = T.Compose([
-        T.Resize(160),
-        T.CenterCrop(160),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-
-    train_dataset, val_dataset = get_imagenette(root=DATASET_ROOT, train_transform=train_transform, test_transform=test_transform)
+    train_dataset, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
 
@@ -64,7 +51,6 @@ def train(run_dir):
     checkpoint_path = join(run_dir, 'checkpoints')
     logger = SimpleLogger(join(run_dir, 'logs.txt'))
     logger.log(f'Experiment name: {run_dir}')
-    model_args['model_class'] = model.__class__.__name__
     logger.log(model_args)
 
     model.to(device)
@@ -102,23 +88,20 @@ def train(run_dir):
 
         if epoch % checkpoint_every == 0:
             # save
-            os.makedirs(checkpoint_path, exist_ok=True)
-            torch.save(model.state_dict(), f'{checkpoint_path}/epoch_{epoch}.pth')
+            save_state(checkpoint_path, model, model_args, optimizer, epoch)
 
 
 def visualize_predictions(run_dir, epoch=None):
     
     # load model from last epoch or specified epoch
     last_checkpoint = num_epochs if num_epochs > checkpoint_every else 0
-    last_checkpoint = epoch if epoch is not None else last_checkpoint
-
-    model = VisionTransformerMoE(**model_args)
-    model.to(device)
-    checkpoint_path = join(run_dir, 'checkpoints')
-    images_path = join(run_dir, 'images')
-    model.load_state_dict(torch.load(f'{checkpoint_path}/epoch_{last_checkpoint}.pth'))
+    epoch_to_load = epoch if epoch is not None else last_checkpoint
+    checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load}.pth')
+    model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
     
-    # this is a transform that undoes the normalization for visualization
+    images_dir = join(run_dir, 'images')
+
+    # transform without normalization for visualization
     unnormalized_transform = T.Compose([
         T.Resize(160),
         T.CenterCrop(160),
@@ -127,8 +110,8 @@ def visualize_predictions(run_dir, epoch=None):
     
     # load dataset
     # you can decide here how many images you want to visualize
-    _, val_dataset = get_imagenette(root=DATASET_ROOT, test_transform=unnormalized_transform)
-    subset = torch.arange(0, 4000, 400) 
+    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, test_transform=unnormalized_transform)
+    subset = torch.arange(0, 4000, 200) 
 
 
     # visualize predictions
@@ -137,7 +120,7 @@ def visualize_predictions(run_dir, epoch=None):
                             val_dataset,
                             subset, 
                             transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                            save_dir= f'{images_path}/expert_distribution_{last_checkpoint}')
+                            save_dir= f'{images_dir}/expert_distribution_{epoch_to_load}')
 
 
 def visualize_experts(run_dir, epoch=None):
@@ -153,13 +136,13 @@ def visualize_experts(run_dir, epoch=None):
 
     # visualize predictions
     from visualize import display_expert_embeddings
-    display_expert_embeddings(model, 
-                            save_dir=f'{images_path}/expert_distribution_{last_checkpoint}')
+    display_expert_embeddings(model, save_dir=f'{images_path}/expert_distribution_{last_checkpoint}')
 
 
 if __name__ == '__main__':
     run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
     train(run_dir)
+    # run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_14_15_40_47'
     visualize_predictions(run_dir)
     visualize_experts(run_dir)
 

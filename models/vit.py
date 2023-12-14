@@ -8,6 +8,9 @@ from abc import ABC
 
 from .blocks import SelfAttention, MLP
  
+"""
+Plain Vision Transformer.
+"""
 
 
 # ViT MoE Block
@@ -90,7 +93,7 @@ class ViTEncoder(nn.Module):
 
 
 # ViT MoE
-class VisionTransformerMoE(nn.Module):
+class VisionTransformer(nn.Module):
     """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
 
     def __init__(

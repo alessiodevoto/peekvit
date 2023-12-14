@@ -110,7 +110,7 @@ def visualize_predictions(run_dir, epoch=None):
     model.to(device)
     checkpoint_path = join(run_dir, 'checkpoints')
     images_path = join(run_dir, 'images')
-    model.load_state_dict(torch.load(f'{checkpoint_path}/epoch_{last_checkpoint}.pth'))
+    model.load_state_dict(torch.load(f'{checkpoint_path}/epoch_{last_checkpoint}.pth'), strict=False)
     
     # this is a transform that undoes the normalization for visualization
     unnormalized_transform = T.Compose([
@@ -121,8 +121,8 @@ def visualize_predictions(run_dir, epoch=None):
     
     # load dataset
     # you can decide here how many images you want to visualize
-    _, val_dataset = get_imagenette(root=DATASET_ROOT, test_transform=unnormalized_transform)
-    subset = torch.arange(0, 4000, 400) 
+    _, val_dataset, *_ = get_imagenette(root=DATASET_ROOT, test_transform=unnormalized_transform)
+    subset = torch.arange(0, 4000, 200) 
 
 
     # visualize predictions
@@ -136,7 +136,8 @@ def visualize_predictions(run_dir, epoch=None):
 
 
 if __name__ == '__main__':
-    run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
-    train(run_dir)
+    # run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
+    # train(run_dir)
+    run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_14_12_38_50'
     visualize_predictions(run_dir)
 

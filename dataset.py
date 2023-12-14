@@ -64,4 +64,4 @@ def get_imagenette(root, train_transform=IMAGENETTE_TRAIN_TRANSFORM, test_transf
     train_dataset = torchvision.datasets.ImageFolder(train_path, train_transform, target_transform)
     val_dataset = torchvision.datasets.ImageFolder(val_path, test_transform, target_transform)
 
-    return train_dataset, val_dataset, IMAGENETTE_TRAIN_TRANSFORM, IMAGENETTE_TEST_TRANSFORM
+    return train_dataset, val_dataset, train_transform, test_transform

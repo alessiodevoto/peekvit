@@ -7,6 +7,11 @@ from typing import Optional, List
 from abc import ABC
 
 from .blocks import GumbelSoftmax, SelfAttention, MLP
+
+"""
+A Vision Transformer with Mixture of Experts which can be placed at any layer, both on Attentoin and MLPs.
+Not a very efficient implementation as experts are excuted sequentially.
+"""
  
 
 

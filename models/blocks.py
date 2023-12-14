@@ -3,6 +3,10 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn.functional import gumbel_softmax, sigmoid
 
+"""
+A set of nn Modules for various use cases.
+"""
+
 
 # A differentiable Gumbel Softmax module
 class GumbelSoftmax(nn.Module):

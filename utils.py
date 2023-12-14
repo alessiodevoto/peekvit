@@ -6,6 +6,7 @@ from typing import Tuple
 import os  
 from datetime import datetime
 from os.path import join
+from models.models import MODELS_MAP
 
 
 def make_experiment_directory(base_path):
@@ -49,7 +50,7 @@ def get_moes(model):
     from models.moevit import MoE
     moes = {}
     for module_name, module in model.named_modules():
-        if isinstance(module, MoE) and module.num_experts > 1:
+        if isinstance(module, MoE) and module.num_experts > 1: # only add MoE modules with more than 1 expert
             moes[module_name] = module
 
     return moes
@@ -91,7 +92,7 @@ def get_forward_masks(model):
     from models.residualvit import ResidualModule
     masks = {}
     for module_name, module in model.named_modules():
-        if isinstance(module, ResidualModule):
+        if isinstance(module, ResidualModule) and module.residual is True:
             masks[module_name] = module.mask.detach() # (batch_size, sequence_len, 1)
 
     return masks
@@ -149,6 +150,47 @@ def add_noise(model, layer: int, noise_std: float = None, noise_snr: float = Non
         new_layers.insert(layer, noise_module)
         model.encoder.layers = torch.nn.Sequential(*new_layers)
     return model
+
+
+def save_state(path, model, model_args, optimizer, epoch, skip_optimizer=True):
+    """
+    Saves the state of the given model and optimizer to the specified path.
+    """
+    os.makedirs(path, exist_ok=True)
+    state = {
+        'model_class': model.__class__.__name__,
+        'model_args': model_args,
+        'state_dict': model.state_dict(),
+        'optimizer': optimizer.state_dict() if not skip_optimizer else None,
+        'epoch': epoch
+    }
+    torch.save(state, f'{path}/epoch_{epoch}.pth')
+
+
+def load_state(path, model=None, optimizer=None):
+    """
+    Load the model state from a given path.
+
+    Args:
+        path (str): The path to the saved model state.
+        model (torch.nn.Module, optional): The model to load the state into. If None, a new model will be created based on the saved state.
+        optimizer (torch.optim.Optimizer, optional): The optimizer to load the state into. If None, the optimizer state will not be loaded.
+
+    Returns:
+        tuple: A tuple containing the loaded model, optimizer, and the epoch number.
+    """
+    state = torch.load(path)
+    if model is None:
+        
+        # create model based on saved state
+        model = MODELS_MAP[state['model_class']](**state['model_args'])
+        #model = state['model_class'](**state['model_args'])
+    model.load_state_dict(state['state_dict'])
+
+    if optimizer is not None:
+        optimizer.load_state_dict(state['optimizer'])
+        
+    return model, optimizer, state['epoch']
 
 
 class SimpleLogger:
