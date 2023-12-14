@@ -139,7 +139,6 @@ class ViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         residual_layers: Optional[List] = None,
-
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -197,7 +196,7 @@ class ResidualVisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.representation_size = representation_size
         self.num_registers = num_registers
-
+        
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [True] * num_layers
 
@@ -223,7 +222,7 @@ class ResidualVisionTransformer(nn.Module):
             mlp_dim,
             dropout,
             attention_dropout,
-            self.residual_layers
+            self.residual_layers,
             )
 
 

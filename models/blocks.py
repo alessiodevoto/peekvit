@@ -60,15 +60,19 @@ class SelfAttention(nn.Module):
 
 # A class to add random noise to the input according to a specific signal to noise ratio or std deviation
 class SNRNoise(nn.Module):
-    def __init__(self, snr = None, std = None):
+    def __init__(self, noise_type: str = 'gaussian', snr = None, std = None):
       super().__init__()
       self.snr = snr
       self.std = std
+      self.noise_type = noise_type
 
       if snr is None and std is None:
         raise ValueError("Either snr or std must be specified")
       elif snr is not None and std is not None:
         raise ValueError("Only one of snr or std must be specified")
+      
+      if noise_type not in {'gaussian'}:
+        raise ValueError("noise_type must be one of {'gaussian'}")
     
     def forward_snr(self, x: torch.Tensor):
       """

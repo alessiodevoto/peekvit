@@ -44,10 +44,12 @@ model_args = {
         'num_registers': 0,
     }
 
+
 noise_args = {
-    'noise': True,
-    'noise_snr': 1,
-    'noise_std': None,
+    'noise_type': 'gaussian',
+    'snr': 1,
+    'std': None,
+    'layers': [2]
 }
 
 
@@ -103,7 +105,7 @@ def train(run_dir):
 
         if epoch % checkpoint_every == 0:
             # save
-            save_state(checkpoints_dir, model, model_args, optimizer, epoch)
+            save_state(checkpoints_dir, model, model_args, noise_args, optimizer, epoch)
 
 
 def visualize_predictions(run_dir, epoch=None):
@@ -113,7 +115,6 @@ def visualize_predictions(run_dir, epoch=None):
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load}.pth')
     model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
-    model = add_noise(model, layer=2, noise_snr=1)
     
     images_dir = join(run_dir, 'images')
 

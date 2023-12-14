@@ -6,7 +6,7 @@ from typing import Tuple
 import os  
 from datetime import datetime
 from os.path import join
-from models.models import MODELS_MAP
+from models.models import build_model
 
 
 def make_experiment_directory(base_path):
@@ -123,7 +123,7 @@ def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
 
 
 
-def add_noise(model, layer: int, noise_std: float = None, noise_snr: float = None):
+def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float = None, **kwargs):
     """
     Adds a noise module to the specified layer of the model's encoder. The model must be a transformer, 
     and it must have an encoder with a layers attribute.
@@ -131,11 +131,12 @@ def add_noise(model, layer: int, noise_std: float = None, noise_snr: float = Non
     Args:
         model (nn.Module): The model to which the noise module will be added.
         layer (int): The index of the layer where the noise module will be inserted.
+        noise_type (str): The type of noise to add. Must be one of {'gaussian'}.
         noise_std (float): The standard deviation of the noise.
         noise_snr (float): The signal-to-noise ratio of the noise.
     """
     from models.blocks import SNRNoise
-    noise_module = SNRNoise(std=noise_std, snr=noise_snr)
+    noise_module = SNRNoise(noise_type=noise_type, std=std, snr=snr)
     new_layers = list(model.encoder.layers)
 
     # this could be an ordered dict or a list, deal with both cases
@@ -152,13 +153,14 @@ def add_noise(model, layer: int, noise_std: float = None, noise_snr: float = Non
     return model
 
 
-def save_state(path, model, model_args, optimizer, epoch, skip_optimizer=True):
+def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optimizer=True):
     """
     Saves the state of the given model and optimizer to the specified path.
     """
     os.makedirs(path, exist_ok=True)
     state = {
         'model_class': model.__class__.__name__,
+        'noise_args': noise_args,
         'model_args': model_args,
         'state_dict': model.state_dict(),
         'optimizer': optimizer.state_dict() if not skip_optimizer else None,
@@ -181,9 +183,8 @@ def load_state(path, model=None, optimizer=None):
     """
     state = torch.load(path)
     if model is None:
-        
         # create model based on saved state
-        model = MODELS_MAP[state['model_class']](**state['model_args'])
+        model = build_model(state['model_class'], state['model_args'], state['noise_args'])
         #model = state['model_class'](**state['model_args'])
     model.load_state_dict(state['state_dict'])
 
