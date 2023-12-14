@@ -8,6 +8,8 @@ from tqdm import tqdm
 from plotly import graph_objects as go
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+from os.path import join
+
 from utils import make_batch, get_model_device, prepare_for_matplotlib, get_last_forward_gates, get_moes, get_forward_masks
 
 
@@ -175,7 +177,7 @@ def img_expert_distribution(model, images: List, subset, transform: Optional[Non
 
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
-      plt.savefig(save_dir + f'expert_distribution_batch_{img_idx}.jpg', dpi=200)
+      plt.savefig(join(save_dir, f'expert_distribution_batch_{img_idx}.jpg'), dpi=100)
     plt.close()
 
 
@@ -194,7 +196,7 @@ def display_expert_embeddings(model, save_dir):
   for moe_name, moe in moes.items():
     
     # get the expert embeddings, shape (num_experts, hidden_dim)
-    embs = moe.gating_network.gate.weight.detach().detach().cpu().numpy()
+    embs = moe.gating_network.gate.weight.detach().cpu().numpy()
 
     # reduce hidden_dim to 3 using PCA
     pca = PCA(n_components=3)
@@ -211,7 +213,7 @@ def display_expert_embeddings(model, save_dir):
     # save
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
-      fig.write_image(save_dir+f'{moe_name}_experts.png')
+      fig.write_image(join(save_dir, f'{moe_name}_experts.png'))
 
 
 
@@ -270,7 +272,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
       plt.tight_layout()
-      plt.savefig(save_dir + f'token_masks_batch_{img_idx}.jpg', dpi=200)
+      plt.savefig(join(save_dir, f'token_masks_batch_{img_idx}.jpg'), dpi=100)
     plt.close()
 
 
