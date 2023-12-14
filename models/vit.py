@@ -32,12 +32,12 @@ class ViTBlock(nn.Module):
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
-        self.self_attention = SelfAttention(hidden_dim, num_heads, attn_num_experts, attention_dropout)
+        self.self_attention = SelfAttention(hidden_dim, num_heads, attention_dropout)
         self.dropout = nn.Dropout(dropout)
 
         # MLP block
         self.ln_2 = nn.LayerNorm(hidden_dim)
-        self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim, num_experts=mlp_num_experts)
+        self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -71,17 +71,17 @@ class ViTEncoder(nn.Module):
         # we have batch_first=True in nn.MultiAttention() by default
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
-        layers: OrderedDict[str, nn.Module] = OrderedDict()
+        layers: List = []
         for i in range(num_layers):
-            layers[f"encoder_layer_{i}"] = ViTBlock(
-                                                num_heads,
-                                                hidden_dim,
-                                                mlp_dim,
-                                                dropout,
-                                                attention_dropout,
-                                                )
+            layers.append(ViTBlock(
+                            num_heads,
+                            hidden_dim,
+                            mlp_dim,
+                            dropout,
+                            attention_dropout,
+                            ))
 
-        self.layers = nn.Sequential(layers)
+        self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
 
     def forward(self, input: torch.Tensor):

@@ -4,6 +4,7 @@ from .vit import VisionTransformer
 
 MODELS_MAP = {
     'visiontransformer': VisionTransformer,
+    'VisionTransformer': VisionTransformer,
     'vit': VisionTransformer,
     
     'residualvisiontransformer': ResidualVisionTransformer,
@@ -14,3 +15,8 @@ MODELS_MAP = {
     'VisionTransformerMoE': VisionTransformerMoE,
     'vitmoe': VisionTransformerMoE, 
 }
+
+
+def build_model(model_class, model_args, noise_args):
+    model = MODELS_MAP[model_class](**model_args)
+    return model

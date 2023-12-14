@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from collections import OrderedDict
 import math
-from typing import Optional, List
+from typing import Optional, List, Union
 from abc import ABC
 
 from .blocks import SelfAttention, MLP
@@ -64,6 +64,7 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         attention_dropout: float,
         temp: float = 1.0,
         residual: bool = True,
+        threshold: Union[float, str] = 'auto'
     ):
         super().__init__(
         num_heads,
@@ -77,7 +78,8 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         if self.residual is True: 
             self.residual_gate = nn.Linear(hidden_dim, 1)
             self.temp = temp
-            self.threshold = 0.5
+            # threshold is a learnable parameter or a float
+            self.threshold = threshold if isinstance(threshold, float) else torch.nn.Parameter(torch.tensor(0.5))
        
     
     def forward(self, input: torch.Tensor):
@@ -97,9 +99,8 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         # residual gating, here we learn a scalar for each token
         mask = torch.sigmoid(self.residual_gate(x) / self.temp)
         self.mask = nn.functional.relu(mask - self.threshold)
-        #print(self.residual_gate.shape)
-        #print(x.shape)
-        return  x + self.mask * input
+
+        return  self.mask * input
 
     def forward_pre(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -113,7 +114,7 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
 
         #print(self.residual_gate.shape)
         #print(x.shape)
-        return  x + input
+        return  x 
     
     def forward_no_residual(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -145,18 +146,18 @@ class ViTEncoder(nn.Module):
         # we have batch_first=True in nn.MultiAttention() by default
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
-        layers: OrderedDict[str, nn.Module] = OrderedDict()
+        layers:List = []
         for i in range(num_layers):
-            layers[f"encoder_layer_{i}"] = ViTBlockResidual(
-                                                num_heads,
-                                                hidden_dim,
-                                                mlp_dim,
-                                                dropout,
-                                                attention_dropout,
-                                                residual = residual_layers[i]
-                                                )
+            layers.append(ViTBlockResidual(
+                            num_heads,
+                            hidden_dim,
+                            mlp_dim,
+                            dropout,
+                            attention_dropout,
+                            residual = residual_layers[i]
+                            ))
 
-        self.layers = nn.Sequential(layers)
+        self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
 
     def forward(self, input: torch.Tensor):

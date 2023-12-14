@@ -165,19 +165,19 @@ class ViTEncoderMoE(nn.Module):
         self.attn_moes = attn_moes or [1] * num_layers
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
-        layers: OrderedDict[str, nn.Module] = OrderedDict()
+        layers: List = []
         for i in range(num_layers):
-            layers[f"encoder_layer_{i}"] = ViTBlockMoE(
-                                                num_heads,
-                                                hidden_dim,
-                                                mlp_dim,
-                                                dropout,
-                                                attention_dropout,
-                                                mlp_num_experts = self.mlp_moes[i],
-                                                attn_num_experts = self.attn_moes[i]
-                                                )
+            layers.append(ViTBlockMoE(
+                                      num_heads,
+                                      hidden_dim,
+                                      mlp_dim,
+                                      dropout,
+                                      attention_dropout,
+                                      mlp_num_experts = self.mlp_moes[i],
+                                      attn_num_experts = self.attn_moes[i]
+                                      ))
 
-        self.layers = nn.Sequential(layers)
+        self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
 
     def forward(self, input: torch.Tensor):

@@ -7,9 +7,9 @@ from tqdm import tqdm
 from os.path import join
 
 
-from utils import SimpleLogger, make_experiment_directory, save_state, load_state
+from utils import SimpleLogger, make_experiment_directory, save_state, load_state, add_noise
 from peekvit.dataset import get_imagenette
-from models.models import MODELS_MAP
+from models.models import build_model
 
 
 # PATHS 
@@ -20,14 +20,17 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-num_epochs = 1
+num_epochs = 2
 eval_every = 5
 checkpoint_every = 5
 
-model_class = 'VisionTransformerMoE'
+# model_class = 'VisionTransformerMoE'
+model_class = 'ResidualVisionTransformer'
+# model_class = 'VisionTransformer'
+
 model_args = {
-        'image_size': 160,
-        'patch_size': 8,
+        'image_size': 224,
+        'patch_size': 16,
         'num_classes': 10,
         'hidden_dim': 96,
         'num_layers': 4,
@@ -35,27 +38,34 @@ model_args = {
         'mlp_dim': 128,
         'dropout': 0.1,
         'attention_dropout': 0.1,
-        'mlp_moes': [1,1,1,2],
-        'attn_moes': [1,1,1,1],
-        # 'residual_layers': [True, True, False, False],
-        # 'num_registers': 4,
+        # 'mlp_moes': [1,1,1,2],
+        # 'attn_moes': [1,1,1,1],
+        'residual_layers': [True, True, False, False],
+        'num_registers': 0,
     }
+
+noise_args = {
+    'noise': True,
+    'noise_snr': 1,
+    'noise_std': None,
+}
 
 
 
 def train(run_dir):
 
+    checkpoints_dir = join(run_dir, 'checkpoints')
+    logger = SimpleLogger(join(run_dir, 'logs.txt'))
+    logger.log(f'Experiment name: {run_dir}')
+    logger.log(model_class)
+    logger.log(model_args)
+    logger.log(noise_args)
+
     train_dataset, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
 
-    model = MODELS_MAP[model_class](**model_args)
-    
-    checkpoints_dir = join(run_dir, 'checkpoints')
-    logger = SimpleLogger(join(run_dir, 'logs.txt'))
-    logger.log(f'Experiment name: {run_dir}')
-    logger.log(model.__class__.__name__)
-    logger.log(model_args)
+    model = build_model(model_class, model_args, noise_args)
 
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -103,13 +113,14 @@ def visualize_predictions(run_dir, epoch=None):
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load}.pth')
     model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
+    model = add_noise(model, layer=2, noise_snr=1)
     
     images_dir = join(run_dir, 'images')
 
     # transform without normalization for visualization
     visualization_transform = T.Compose([
-        T.Resize(160),
-        T.CenterCrop(160),
+        T.Resize(224),
+        T.CenterCrop(224),
         T.ToTensor(),
     ])
     
@@ -120,12 +131,13 @@ def visualize_predictions(run_dir, epoch=None):
 
 
     # visualize predictions
-    from visualize import img_expert_distribution
-    img_expert_distribution(model, 
+    from visualize import img_expert_distribution, img_mask_distribution
+
+    img_mask_distribution(model, 
                             val_dataset,
                             subset, 
                             transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                            save_dir= f'{images_dir}/epoch_{epoch_to_load}')
+                            save_dir = f'{images_dir}/epoch_{epoch_to_load}')
 
 
 def visualize_experts(run_dir, epoch=None):
@@ -133,7 +145,8 @@ def visualize_experts(run_dir, epoch=None):
     last_checkpoint = num_epochs if num_epochs > checkpoint_every else 0
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load}.pth')
-    model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
+    model, optimizer, epoch = load_state(checkpoint_path, model=model, optimizer=None)    
+    
     
     images_dir = join(run_dir, 'images')
     
@@ -144,9 +157,9 @@ def visualize_experts(run_dir, epoch=None):
 
 
 if __name__ == '__main__':
-    #run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
-    #train(run_dir)
-    run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_14_16_00_30'
+    run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
+    train(run_dir)
+    # run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_14_16_00_30'
     visualize_predictions(run_dir)
-    visualize_experts(run_dir)
+    # visualize_experts(run_dir)
 
