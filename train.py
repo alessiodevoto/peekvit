@@ -20,13 +20,13 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-num_epochs = 2
+num_epochs = 20
 eval_every = 5
 checkpoint_every = 5
 
 # model_class = 'VisionTransformerMoE'
 model_class = 'ResidualVisionTransformer'
-# model_class = 'VisionTransformer'
+#model_class = 'VisionTransformer'
 
 model_args = {
         'image_size': 224,
@@ -42,6 +42,7 @@ model_args = {
         # 'attn_moes': [1,1,1,1],
         'residual_layers': [True, True, False, False],
         'num_registers': 0,
+        'threshold': 0.2
     }
 
 
@@ -51,6 +52,8 @@ noise_args = {
     'std': None,
     'layers': [2]
 }
+
+noise_args = None
 
 
 

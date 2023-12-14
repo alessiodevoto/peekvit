@@ -139,6 +139,7 @@ class ViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         residual_layers: Optional[List] = None,
+        threshold: Union[float, str] = 'auto'
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -153,7 +154,8 @@ class ViTEncoder(nn.Module):
                             mlp_dim,
                             dropout,
                             attention_dropout,
-                            residual = residual_layers[i]
+                            residual = residual_layers[i],
+                            threshold=threshold
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -184,6 +186,7 @@ class ResidualVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         residual_layers: Optional[List] = None,
+        threshold: Union[float, str] = 'auto'
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -196,6 +199,7 @@ class ResidualVisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.representation_size = representation_size
         self.num_registers = num_registers
+        self.threshold = threshold
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [True] * num_layers
@@ -223,6 +227,7 @@ class ResidualVisionTransformer(nn.Module):
             dropout,
             attention_dropout,
             self.residual_layers,
+            threshold
             )
 
 
