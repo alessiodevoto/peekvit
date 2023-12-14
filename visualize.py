@@ -1,6 +1,5 @@
 import os
 import torch
-from utils import get_last_forward_gates, get_forward_masks, prepare_for_matplotlib, get_moes
 import matplotlib.pyplot as plt
 import torch
 from einops import rearrange
@@ -9,20 +8,7 @@ from tqdm import tqdm
 from plotly import graph_objects as go
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-
-def make_batch(x: torch.Tensor):
-  """
-  Converts the given input to a batch of size 1 if it is not already a batch.
-  """
-  if len(x.shape) == 3:
-    return x.unsqueeze(0)
-
-
-def get_model_device(model: torch.nn.Module):
-    """
-    Retrieves the device of the given model.
-    """
-    return next(model.parameters()).device
+from utils import make_batch, get_model_device, prepare_for_matplotlib, get_last_forward_gates, get_moes, get_forward_masks
 
 
 """@torch.no_grad()
@@ -166,7 +152,7 @@ def img_expert_distribution(model, images: List, subset, transform: Optional[Non
     model(make_batch(_img).to(device))
 
     # retrieve last forward gating probs
-    gates = get_last_forward_gates(model)  # <moe, gating_probs>
+    gates = get_last_forward_gates(model)  # <moe, gating_probs>, each gating_probs is (batch, tokens, exp)
 
     # prepare plot, we want a row for each moe layer,
     # and two columns, one for the image and one for the expert distribution
@@ -189,13 +175,13 @@ def img_expert_distribution(model, images: List, subset, transform: Optional[Non
 
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
-      plt.savefig(save_dir + f'expert_distribution_batch_{img_idx}.jpg')
+      plt.savefig(save_dir + f'expert_distribution_batch_{img_idx}.jpg', dpi=200)
     plt.close()
 
 
 def display_expert_embeddings(model, save_dir):
   """
-  Display the expert embeddings using a 3D scatter plot.
+  Display the expert embeddings using a 3D scatter plot. We use PCA to reduce dimensionality of expert embeddings.
 
   Args:
     model (Model): The model.
@@ -206,8 +192,11 @@ def display_expert_embeddings(model, save_dir):
   """
   moes = get_moes(model)
   for moe_name, moe in moes.items():
+    
+    # get the expert embeddings, shape (num_experts, hidden_dim)
     embs = moe.gating_network.gate.weight.detach().detach().cpu().numpy()
 
+    # reduce hidden_dim to 3 using PCA
     pca = PCA(n_components=3)
     transformed_data = pca.fit_transform(embs)
     fig = go.Figure(go.Scatter3d(x=transformed_data[:, 0],
@@ -218,6 +207,8 @@ def display_expert_embeddings(model, save_dir):
                          color=list(range(embs.shape[0])),
                          opacity=0.8)))
     fig.update_layout(title=moe_name)
+
+    # save
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
       fig.write_image(save_dir+f'{moe_name}_experts.png')
@@ -226,7 +217,17 @@ def display_expert_embeddings(model, save_dir):
 
 @torch.no_grad()
 def img_mask_distribution(model, images: List, subset, transform: Optional[None] = None, save_dir: str = None):
+  """
+  Plot the expert distribution masks for each layer of a given model.
 
+  Args:
+    model (nn.Module): The model for which to plot the expert distribution masks.
+    images (List): A list of images to visualize.
+    subset: The subset of images to visualize.
+    transform (Optional[None], optional): An optional transformation to apply to the images. Defaults to None.
+    save_dir (str, optional): The directory to save the generated plots. Defaults to None.
+  """
+  
   model.eval()
   device = get_model_device(model)
   num_registers = model.num_registers
@@ -235,7 +236,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
   patch_size = model.patch_size
   patches_per_side = (image_size // patch_size)
 
-  for img_idx in tqdm(subset, desc='Preparing expert distribution plots'):
+  for img_idx in tqdm(subset, desc='Preparing masking plots'):
 
     img, label = images[img_idx]
     # forward pass
@@ -269,7 +270,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
       plt.tight_layout()
-      plt.savefig(save_dir + f'token_masks_batch_{img_idx}.jpg', dpi=300)
+      plt.savefig(save_dir + f'token_masks_batch_{img_idx}.jpg', dpi=200)
     plt.close()
 
 

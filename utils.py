@@ -2,7 +2,37 @@ import torch
 from einops import rearrange
 import numpy as np
 from typing import Tuple 
-import os   
+import os  
+from datetime import datetime
+from os.path import join
+
+
+def make_experiment_directory(base_path):
+    """
+    Creates a new directory for an experiment based on the current date and time.
+    Args:
+        base_path (str): The base path where the experiment directory will be created.
+    Returns:
+        str: The path of the newly created experiment directory.
+    """
+    now = datetime.now()
+    formatted_date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
+    return join(base_path, formatted_date_time)
+
+
+def make_batch(x: torch.Tensor):
+  """
+  Converts the given input to a batch of size 1 if it is not already a batch.
+  """
+  if len(x.shape) == 3:
+    return x.unsqueeze(0)
+
+
+def get_model_device(model: torch.nn.Module):
+    """
+    Retrieves the device of the given model.
+    """
+    return next(model.parameters()).device
 
 
 def get_moes(model):
@@ -15,7 +45,7 @@ def get_moes(model):
     Returns:
         dict: A dictionary containing the names of MoE modules as keys and the modules themselves as values.
     """
-    from models.moe_model import MoE
+    from models.moevit import MoE
     moes = {}
     for module_name, module in model.named_modules():
         if isinstance(module, MoE) and module.num_experts > 1:
@@ -36,7 +66,7 @@ def get_last_forward_gates(model):
         gatin probs shape: (batch_size, sequence_len, num_experts)
     """
 
-    from models.moe_model import MoE
+    from models.moevit import MoE
     gates = {}
     for module_name, module in model.named_modules():
         if isinstance(module, MoE) and module.num_experts > 1:
@@ -48,9 +78,16 @@ def get_last_forward_gates(model):
 
 def get_forward_masks(model):
     """
-    """
+    Retrieves the forward masks from a given residual model.
 
-    from models.residual_model import ResidualModule
+    Args:
+        model: The model from which to retrieve the forward masks.
+
+    Returns:
+        masks: A dictionary containing the forward masks for each ResidualModule in the model.
+               The masks have shape (batch_size, sequence_len, 1).
+    """
+    from models.residualvit import ResidualModule
     masks = {}
     for module_name, module in model.named_modules():
         if isinstance(module, ResidualModule):
@@ -62,6 +99,7 @@ def get_forward_masks(model):
 
 def prepare_for_matplotlib(t):
     """
+    Prepares the given tensor for matplotlib by converting it to a numpy array and reshaping it to have channels last.
     If it is a pytorch tensor, converts it to a numpy array and reshapes it to have channels last.
     If it is a numpy a numpy array, reshapes it to have channels last.
     """
@@ -80,6 +118,24 @@ def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
     mean = torch.tensor(mean).view(1, -1, 1, 1)
     std = torch.tensor(std).view(1, -1, 1, 1)
     return t * std + mean
+
+
+
+def add_noise(model, layer, noise_std, noise_snr):
+    """
+    Adds a noise module to the specified layer of the model's encoder. The model must be a transformer, 
+    and it must have an encoder with a layers attribute.
+    
+    Args:
+        model (nn.Module): The model to which the noise module will be added.
+        layer (int): The index of the layer where the noise module will be inserted.
+        noise_std (float): The standard deviation of the noise.
+        noise_snr (float): The signal-to-noise ratio of the noise.
+    """
+    from models.blocks import SNRNoise
+    noise_module = SNRNoise(std=noise_std, snr=noise_snr)
+    model.encoder.layers.insert(layer, noise_module)
+    
 
 
 class SimpleLogger:

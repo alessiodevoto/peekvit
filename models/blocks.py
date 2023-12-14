@@ -53,23 +53,24 @@ class SelfAttention(nn.Module):
         return out
 
 
-# A class to add gaussian noise to the input
-class Noise(nn.Module):
-    def __init__(self, std):
-      super().__init__()
-      self.std = std
 
-    def forward(self, x):
-      return x + torch.randn_like(x, requires_grad=False) * self.std
-
-
-# A class to add random noise to the input according to a specific signal to noise ratio
+# A class to add random noise to the input according to a specific signal to noise ratio or std deviation
 class SNRNoise(nn.Module):
-    def __init__(self, snr):
+    def __init__(self, snr = None, std = None):
       super().__init__()
       self.snr = snr
+      self.std = std
 
-    def forward(self, x):
+      if snr is None and std is None:
+        raise ValueError("Either snr or std must be specified")
+      elif snr is not None and std is not None:
+        raise ValueError("Only one of snr or std must be specified")
+    
+    def forward_snr(self, x: torch.Tensor):
+      """
+      Adds noise to the input according to the given signal to noise ratio.
+      The input is assumed to be of shape (batch_size, sequence_length, hidden_dim).
+      """
       # compute the signal power
       signal_power = torch.mean(x ** 2, dim=-1, keepdim=True)
       # compute the noise power
@@ -78,3 +79,20 @@ class SNRNoise(nn.Module):
       std = torch.sqrt(noise_power)
       # add the noise
       return x + torch.randn_like(x, requires_grad=False) * std
+  
+    def forward_std(self, x: torch.Tensor):
+      """
+      Adds noise to the input according to the given standard deviation.
+      The input is assumed to be of shape (batch_size, sequence_length, hidden_dim).
+      """
+      return x + torch.randn_like(x, requires_grad=False) * self.std
+    
+    def forward(self, x: torch.Tensor):
+      """
+      Adds noise to the input according to the given signal to noise ratio.
+      The input is assumed to be of shape (batch_size, sequence_length, hidden_dim).
+      """
+      if self.snr is not None:
+        return self.forward_snr(x)
+      else:
+        return self.forward_std(x)

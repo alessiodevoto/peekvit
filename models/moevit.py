@@ -10,11 +10,9 @@ from .blocks import GumbelSoftmax, SelfAttention, MLP
  
 
 
-
 # Abstract class for MoE
 class MoE(ABC, nn.Module):
   pass
-
 
 
 # A differentiable TopK Gate

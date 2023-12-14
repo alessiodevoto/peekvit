@@ -35,7 +35,7 @@ model_args = {
         'dropout': 0.1,
         'attention_dropout': 0.1,
         'mlp_moes': [1,1,1,1],
-        'attn_moes': [1,1,1,4]
+        'attn_moes': [1,1,1,1]
     }
 
 
