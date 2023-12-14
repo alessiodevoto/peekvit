@@ -1,4 +1,3 @@
-import torch
 import torchvision
 import os
 import requests

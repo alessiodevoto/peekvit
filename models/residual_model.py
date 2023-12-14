@@ -5,42 +5,15 @@ from torch.nn.functional import gumbel_softmax
 from collections import OrderedDict
 import math
 from typing import Optional, List
+from abc import ABC
+
+from .blocks import GumbelSoftmax, SelfAttention, MLP, Sigmoid
+
+class ResidualModule(ABC, nn.Module):
+  pass
 
 
-class SigmoidWithTemp(nn.Module):
-    def __init__(self, temp):
-      super().__init__()
-      self.temp = temp
-    def forward(self, x):
-      return torch.sigmoid(x / self.temp)
-
-
-# ViT MLP
-class MLP(nn.Module):
-    def __init__(self, hidden_dim, mlp_dim):
-        super().__init__()
-        self.fc1 = nn.Linear(hidden_dim, mlp_dim)
-        self.fc2 = nn.Linear(mlp_dim, hidden_dim)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.fc2(x)
-        return x
-
-
-# ViT Self Attention
-class SelfAttention(nn.Module):
-    def __init__(self, input_dim, num_heads, dropout=0.0):
-        super().__init__()
-        self.self_attention = torch.nn.MultiheadAttention(input_dim, num_heads, batch_first=True, dropout=dropout)
-
-    def forward(self, x):
-        out, weights = self.self_attention(query=x, key=x, value=x, need_weights=True)
-        return out
-
-
-# ViT MoE Block
+# ViT Block
 class ViTBlock(nn.Module):
     """Transformer encoder block."""
 
@@ -75,10 +48,6 @@ class ViTBlock(nn.Module):
         y = self.ln_2(x)
         y = self.mlp(y)
         return x + y
-
-
-class ResidualModule:
-  pass
 
 
 class ViTBlockResidual(ViTBlock, ResidualModule):
@@ -175,8 +144,6 @@ class ViTEncoder(nn.Module):
         input = self.dropout(input)
         input = self.layers(input)
         return self.ln(input)
-
-
 
 
 class ResidualVisionTransformer(nn.Module):
