@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import torch
 from einops import rearrange
 import numpy as np
@@ -121,7 +122,7 @@ def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
 
 
 
-def add_noise(model, layer, noise_std, noise_snr):
+def add_noise(model, layer: int, noise_std: float = None, noise_snr: float = None):
     """
     Adds a noise module to the specified layer of the model's encoder. The model must be a transformer, 
     and it must have an encoder with a layers attribute.
@@ -134,8 +135,20 @@ def add_noise(model, layer, noise_std, noise_snr):
     """
     from models.blocks import SNRNoise
     noise_module = SNRNoise(std=noise_std, snr=noise_snr)
-    model.encoder.layers.insert(layer, noise_module)
-    
+    new_layers = list(model.encoder.layers)
+
+    # this could be an ordered dict or a list, deal with both cases
+
+    if isinstance(new_layers[0], tuple):
+        # if the first layer is a tuple, this is a dictionary of layers
+        new_layers.insert(layer, ('noise', noise_module))
+        new_layers = OrderedDict(new_layers)
+        model.encoder.layers = torch.nn.Sequential(new_layers)
+    else:
+        # this is just a list
+        new_layers.insert(layer, noise_module)
+        model.encoder.layers = torch.nn.Sequential(*new_layers)
+    return model
 
 
 class SimpleLogger:

@@ -158,7 +158,7 @@ def visualize_experts(run_dir, epoch=None):
 
 
 if __name__ == '__main__':
-    run_dir = make_experiment_directory() # if you just want to visualize some images, set this to the path of a run
+    run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
     train(run_dir)
     visualize_predictions(run_dir)
     visualize_experts(run_dir)

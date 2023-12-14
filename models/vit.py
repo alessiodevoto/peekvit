@@ -7,12 +7,10 @@ from typing import Optional, List
 from abc import ABC
 
 from .blocks import SelfAttention, MLP
-
-class ResidualModule(ABC, nn.Module):
-  pass
+ 
 
 
-# ViT Block
+# ViT MoE Block
 class ViTBlock(nn.Module):
     """Transformer encoder block."""
 
@@ -23,18 +21,20 @@ class ViTBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
+        mlp_num_experts: int = 1,
+        attn_num_experts: int = 1
     ):
         super().__init__()
         self.num_heads = num_heads
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
-        self.self_attention = SelfAttention(hidden_dim, num_heads, dropout=attention_dropout)
+        self.self_attention = SelfAttention(hidden_dim, num_heads, attn_num_experts, attention_dropout)
         self.dropout = nn.Dropout(dropout)
 
         # MLP block
         self.ln_2 = nn.LayerNorm(hidden_dim)
-        self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
+        self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim, num_experts=mlp_num_experts)
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -47,74 +47,6 @@ class ViTBlock(nn.Module):
         y = self.ln_2(x)
         y = self.mlp(y)
         return x + y
-
-
-class ViTBlockResidual(ViTBlock, ResidualModule):
-    def __init__(
-        self,
-        num_heads: int,
-        hidden_dim: int,
-        mlp_dim: int,
-        dropout: float,
-        attention_dropout: float,
-        temp: float = 1.0,
-        residual: bool = True,
-    ):
-        super().__init__(
-        num_heads,
-        hidden_dim,
-        mlp_dim,
-        dropout,
-        attention_dropout,               
-        )
-        
-        self.residual_gate = nn.Linear(hidden_dim, 1)
-        self.temp = temp
-        self.threshold = 0.5
-        self.residual = residual
-    
-    def forward(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        if self.residual:
-            return self.forward_post(input)
-        else:
-            return self.forward_no_residual(input)
-
-
-    def forward_post(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        
-        # forward pass through ViTBlock
-        x = super().forward(input)
-
-        # residual gating, here we learn a scalar for each token
-        mask = torch.sigmoid(self.residual_gate(x) / self.temp)
-        self.mask = nn.functional.relu(mask - self.threshold)
-        #print(self.residual_gate.shape)
-        #print(x.shape)
-        return  x + self.mask * input
-
-    def forward_pre(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        
-        # residual gating, here we learn a scalar for each token
-        mask = torch.sigmoid(self.residual_gate(x) / self.temp)
-        self.mask = nn.functional.relu(mask - self.threshold)
-
-        # forward pass through ViTBlock
-        x = super().forward(self.mask * input)
-
-        #print(self.residual_gate.shape)
-        #print(x.shape)
-        return  x + input
-    
-    def forward_no_residual(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-
-        # forward pass through ViTBlock
-        x = super().forward(input)
-
-        return  x
 
 
 # ViT Encoder
@@ -130,8 +62,6 @@ class ViTEncoder(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
-        residual_layers: Optional[List] = None,
-
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -140,13 +70,12 @@ class ViTEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         layers: OrderedDict[str, nn.Module] = OrderedDict()
         for i in range(num_layers):
-            layers[f"encoder_layer_{i}"] = ViTBlockResidual(
+            layers[f"encoder_layer_{i}"] = ViTBlock(
                                                 num_heads,
                                                 hidden_dim,
                                                 mlp_dim,
                                                 dropout,
                                                 attention_dropout,
-                                                residual = residual_layers[i]
                                                 )
 
         self.layers = nn.Sequential(layers)
@@ -160,7 +89,8 @@ class ViTEncoder(nn.Module):
         return self.ln(input)
 
 
-class ResidualVisionTransformer(nn.Module):
+# ViT MoE
+class VisionTransformerMoE(nn.Module):
     """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
 
     def __init__(
@@ -176,7 +106,6 @@ class ResidualVisionTransformer(nn.Module):
         num_classes: int = 1000,
         representation_size: Optional[int] = None,
         num_registers: int = 0,
-        residual_layers: Optional[List] = None,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -188,10 +117,9 @@ class ResidualVisionTransformer(nn.Module):
         self.dropout = dropout
         self.num_classes = num_classes
         self.representation_size = representation_size
+        self.num_heads = num_heads
         self.num_registers = num_registers
 
-        # assume all layers are residual by default
-        self.residual_layers = residual_layers or [True] * num_layers
 
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
@@ -214,8 +142,7 @@ class ResidualVisionTransformer(nn.Module):
             hidden_dim,
             mlp_dim,
             dropout,
-            attention_dropout,
-            self.residual_layers
+            attention_dropout
             )
 
 
@@ -262,12 +189,11 @@ class ResidualVisionTransformer(nn.Module):
         if self.num_registers > 0:
             batch_register_tokens = self.register_tokens.expand(n, -1, -1)
             x = torch.cat([x, batch_register_tokens], dim=1)
-        
+
         # Expand the class token to the full batch
         batch_class_token = self.class_token.expand(n, -1, -1)
         x = torch.cat([batch_class_token, x], dim=1)
 
-        # Pass through the encoder
         x = self.encoder(x)
 
         # Classifier "token" as used by standard language architectures
@@ -278,3 +204,12 @@ class ResidualVisionTransformer(nn.Module):
         return x
 
 
+
+
+# Test
+"""
+vitmoe = VisionTransformerMoE(image_size = 64, num_layers=2, patch_size=32, num_heads=4, hidden_dim=4, mlp_dim=32, dropout=0.0, attention_dropout=0.0, mlp_moes=[5, 10])
+data = torch.randn(2, 3, 64, 64)
+out = vitmoe(data)
+out.mean().backward()
+"""

@@ -230,7 +230,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
   
   model.eval()
   device = get_model_device(model)
-  num_registers = model.num_registers
+  num_registers = getattr(model, 'num_registers', 0) 
 
   image_size = max(images[0][0].shape[-1], images[0][0].shape[0])  # it could be channel first or channel last
   patch_size = model.patch_size
