@@ -37,6 +37,10 @@ def get_model_device(model: torch.nn.Module):
     return next(model.parameters()).device
 
 
+######################################################## MoEs ##################################################################
+
+
+
 def get_moes(model):
     """
     Retrieves all MoE (Mixture of Experts) modules from the given model.
@@ -77,6 +81,8 @@ def get_last_forward_gates(model):
     return gates
 
 
+######################################################## Residual ##################################################################
+
 
 def get_forward_masks(model):
     """
@@ -98,29 +104,7 @@ def get_forward_masks(model):
     return masks
 
 
-
-def prepare_for_matplotlib(t):
-    """
-    Prepares the given tensor for matplotlib by converting it to a numpy array and reshaping it to have channels last.
-    If it is a pytorch tensor, converts it to a numpy array and reshapes it to have channels last.
-    If it is a numpy a numpy array, reshapes it to have channels last.
-    """
-    if isinstance(t, torch.Tensor):
-        t = t.detach().cpu().numpy()
-    if isinstance(t, np.ndarray) and len(t.shape) == 3 and t.shape[0] in {3, 1}:
-        t = rearrange(t, 'c h w -> h w c')
-        
-    return t
-
-
-def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
-    """
-    Denormalizes the given tensor with the given mean and standard deviation.
-    """
-    mean = torch.tensor(mean).view(1, -1, 1, 1)
-    std = torch.tensor(std).view(1, -1, 1, 1)
-    return t * std + mean
-
+######################################################## Noise ##################################################################
 
 
 def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float = None, **kwargs):
@@ -151,6 +135,9 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
         new_layers.insert(layer, noise_module)
         model.encoder.layers = torch.nn.Sequential(*new_layers)
     return model
+
+
+######################################################## Training ##################################################################
 
 
 def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optimizer=True):

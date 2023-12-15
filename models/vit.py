@@ -24,8 +24,6 @@ class ViTBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
-        mlp_num_experts: int = 1,
-        attn_num_experts: int = 1
     ):
         super().__init__()
         self.num_heads = num_heads

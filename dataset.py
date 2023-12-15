@@ -11,13 +11,13 @@ import pathlib
 IMAGENETTE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz'
 
 IMAGENETTE_TEST_TRANSFORM  =  T.Compose([
-                              T.Resize(224),
-                              T.CenterCrop(224),
+                              T.Resize(160),
+                              T.CenterCrop(160),
                               T.ToTensor(),
                               T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
 IMAGENETTE_TRAIN_TRANSFORM =  T.Compose([
-                              T.RandomResizedCrop(224),
+                              T.RandomResizedCrop(160),
                               T.RandomHorizontalFlip(),
                               T.ToTensor(),
                               T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])

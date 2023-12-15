@@ -20,7 +20,7 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-num_epochs = 20
+num_epochs = 10
 eval_every = 5
 checkpoint_every = 5
 
@@ -29,8 +29,8 @@ model_class = 'ResidualVisionTransformer'
 #model_class = 'VisionTransformer'
 
 model_args = {
-        'image_size': 224,
-        'patch_size': 16,
+        'image_size': 160,
+        'patch_size': 8,
         'num_classes': 10,
         'hidden_dim': 96,
         'num_layers': 4,
@@ -40,9 +40,11 @@ model_args = {
         'attention_dropout': 0.1,
         # 'mlp_moes': [1,1,1,2],
         # 'attn_moes': [1,1,1,1],
-        'residual_layers': [True, True, False, False],
+        'residual_layers': [True, True, True, True],
         'num_registers': 0,
-        'threshold': 0.2
+        'threshold': 0.5,
+        'num_class_tokens': 2,
+        'add_input': True,
     }
 
 
@@ -123,8 +125,8 @@ def visualize_predictions(run_dir, epoch=None):
 
     # transform without normalization for visualization
     visualization_transform = T.Compose([
-        T.Resize(224),
-        T.CenterCrop(224),
+        T.Resize(160),
+        T.CenterCrop(160),
         T.ToTensor(),
     ])
     

@@ -1,10 +1,10 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from collections import OrderedDict
 import math
 from typing import Optional, List, Union
 from abc import ABC
+from einops import reduce
 
 from .blocks import SelfAttention, MLP
 
@@ -64,6 +64,7 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         attention_dropout: float,
         temp: float = 1.0,
         residual: bool = True,
+        add_input: bool = False,
         threshold: Union[float, str] = 'auto'
     ):
         super().__init__(
@@ -80,48 +81,32 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
             self.temp = temp
             # threshold is a learnable parameter or a float
             self.threshold = threshold if isinstance(threshold, float) else torch.nn.Parameter(torch.tensor(0.5))
+            self.add_input = add_input
        
     
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        if self.residual:
-            return self.forward_post(input)
+        if self.residual is True:
+            return self.forward_residual(input)
         else:
             return self.forward_no_residual(input)
 
 
-    def forward_post(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        
-        # forward pass through ViTBlock
-        x = super().forward(input)
-
-        # residual gating, here we learn a scalar for each token
-        mask = torch.sigmoid(self.residual_gate(x) / self.temp)
-        self.mask = nn.functional.relu(mask - self.threshold)
-
-        return  self.mask * input
-
-    def forward_pre(self, input: torch.Tensor):
+    def forward_residual(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
         # residual gating, here we learn a scalar for each token
-        mask = torch.sigmoid(self.residual_gate(x) / self.temp)
+        mask = torch.sigmoid(self.residual_gate(input) / self.temp)
         self.mask = nn.functional.relu(mask - self.threshold)
 
         # forward pass through ViTBlock
         x = super().forward(self.mask * input)
 
-        #print(self.residual_gate.shape)
-        #print(x.shape)
-        return  x 
+        return x + input if self.add_input else x
     
     def forward_no_residual(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-
-        # forward pass through ViTBlock
         x = super().forward(input)
-
         return  x
 
 
@@ -139,7 +124,9 @@ class ViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         residual_layers: Optional[List] = None,
-        threshold: Union[float, str] = 'auto'
+        threshold: Union[float, str] = 'auto',
+        add_input: bool = False
+
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -155,7 +142,8 @@ class ViTEncoder(nn.Module):
                             dropout,
                             attention_dropout,
                             residual = residual_layers[i],
-                            threshold=threshold
+                            threshold=threshold,
+                            add_input=add_input
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -186,7 +174,9 @@ class ResidualVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         residual_layers: Optional[List] = None,
-        threshold: Union[float, str] = 'auto'
+        threshold: Union[float, str] = 'auto',
+        add_input: bool = True,
+        num_class_tokens: int = 1,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -199,19 +189,19 @@ class ResidualVisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.representation_size = representation_size
         self.num_registers = num_registers
+        self.num_class_tokens = num_class_tokens
         self.threshold = threshold
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [True] * num_layers
-
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
 
         seq_length = (image_size // patch_size) ** 2
 
         # Add a class token
-        self.class_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
-        seq_length += 1
+        self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
+        seq_length += num_class_tokens
 
         # Add registers
         if num_registers > 0:
@@ -227,7 +217,8 @@ class ResidualVisionTransformer(nn.Module):
             dropout,
             attention_dropout,
             self.residual_layers,
-            threshold
+            threshold,
+            add_input
             )
 
 
@@ -276,15 +267,17 @@ class ResidualVisionTransformer(nn.Module):
             x = torch.cat([x, batch_register_tokens], dim=1)
         
         # Expand the class token to the full batch
-        batch_class_token = self.class_token.expand(n, -1, -1)
-        x = torch.cat([batch_class_token, x], dim=1)
+        batch_class_tokens = self.class_tokens.expand(n, -1, -1)
+        x = torch.cat([x, batch_class_tokens], dim=1)
 
         # Pass through the encoder
         x = self.encoder(x)
 
-        # Classifier "token" as used by standard language architectures
-        x = x[:, 0]
+        # Get all class tokens and average them
+        x = x[:, 0:self.num_class_tokens]
+        x = reduce(x, 'n c e -> n e', reduction='mean')
 
+        # Classification head
         x = self.head(x)
 
         return x

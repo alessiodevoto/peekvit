@@ -95,6 +95,7 @@ class SNRNoise(nn.Module):
       """
       return x + torch.randn_like(x, requires_grad=False) * self.std
     
+    @torch.no_grad()
     def forward(self, x: torch.Tensor):
       """
       Adds noise to the input according to the given signal to noise ratio.

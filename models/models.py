@@ -19,7 +19,7 @@ MODELS_MAP = {
 
 def build_model(model_class, model_args, noise_settings=None):
     """
-    Build a model based on the given model class and arguments.
+    Build a model based on the given model class and arguments. Possibly add noise.
     
     Args:
         model_class (str): The class name of the model.
@@ -38,6 +38,5 @@ def build_model(model_class, model_args, noise_settings=None):
         noise_layers = noise_settings['layers']
         for layer in noise_layers:
             model = add_noise(model, layer, **noise_settings)
-
 
     return model
