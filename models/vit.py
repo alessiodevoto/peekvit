@@ -28,7 +28,10 @@ class ViTBlock(nn.Module):
     ):
         super().__init__()
         self.num_heads = num_heads
-
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+        
+        
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
         self.self_attention = SelfAttention(hidden_dim, num_heads, attention_dropout)

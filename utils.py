@@ -96,7 +96,7 @@ def get_forward_masks(model):
     from models.residualvit import ResidualModule
     masks = {}
     for module_name, module in model.named_modules():
-        if isinstance(module, ResidualModule) and module.skip is not None:
+        if isinstance(module, ResidualModule) and module.skip not in {None, 'none'}:
             masks[module_name] = module.mask # (batch_size, sequence_len, 1)
 
     return masks
@@ -151,7 +151,7 @@ def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optim
         'optimizer': optimizer.state_dict() if not skip_optimizer else None,
         'epoch': epoch
     }
-    torch.save(state, f'{path}/epoch_{epoch}.pth')
+    torch.save(state, f'{path}/epoch_{epoch:03}.pth')
 
 
 def load_state(path, model=None, optimizer=None):
@@ -178,8 +178,82 @@ def load_state(path, model=None, optimizer=None):
         
     return model, optimizer, state['epoch']
 
-def initialize_residual_vit_from_vit(vit_model, residual_model):
-    pass
+
+
+def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
+    # transform a vit model to a residualvit model
+    from models.residualvit import ResidualViTBlock
+
+    # initialize residual block with same parameters as vit block
+    residual_block = ResidualViTBlock(
+        num_heads=vitblock.num_heads,
+        hidden_dim=vitblock.hidden_dim,
+        mlp_dim=vitblock.mlp_dim,
+        dropout=vitblock.dropout.p,
+        attention_dropout=vitblock.self_attention.self_attention.dropout,
+        **residualvitblock_args
+        )
+
+    # copy weights from vit block to residualvit block
+    residual_block.ln_1 = vitblock.ln_1
+    residual_block.self_attention = vitblock.self_attention
+    residual_block.dropout = vitblock.dropout
+    residual_block.ln_2 = vitblock.ln_2
+    residual_block.mlp = vitblock.mlp
+
+    return residual_block
+
+
+def add_residual_gates(residualvit_model, residual_gates_args):
+    from models.residualvit import ResidualGate, ResidualViTBlock
+    skip = residual_gates_args['skip']
+    gate_type = residual_gates_args['gate_type']
+    add_input = residual_gates_args['add_input']
+    temp = residual_gates_args['temp']
+    for module_name, module in residualvit_model.named_modules():
+        if isinstance(module, ResidualViTBlock):
+            print(f'Adding residual gate to {module_name}')
+            module.skip = skip  
+            module.add_input = add_input
+            module.residual_gate = ResidualGate(module.hidden_dim, temp=temp, gate_type=gate_type)
+    return residualvit_model
+
+
+def freeze_module(module):
+    # freeze all parameters of the module
+    for param in module.parameters():
+        param.requires_grad = False
+
+
+"""def train_only_gates(residualvit_model):
+    # freeze all parameters except the gates
+    from models.residualvit import ResidualGate
+    for module_name, module in residualvit_model.named_modules():
+        if isinstance(module, ResidualGate):
+            for param in module.parameters():
+                param.requires_grad = True
+        else:
+            print(f'Freezing {module_name}')
+            freeze_module(module)
+    return residualvit_model"""
+
+def train_only_gates(residualvit_model):
+    # freeze all parameters except the gates
+    for param_name, param in residualvit_model.named_parameters():
+        if 'gate' or 'class' in param_name:
+            param.requires_grad = True
+        else:
+            # print(f'Freezing {param_name}')
+            param.requires_grad = False
+    return residualvit_model
+
+def reinit_class_token(model):
+    # reinitialize the class token
+    for param_name, param in model.named_parameters():
+        if 'class' in param_name:
+            print(f'Reinitializing {param_name}')
+            torch.nn.init.normal_(param, mean=0.0, std=0.02)
+    return model
 
 class SimpleLogger:
     """

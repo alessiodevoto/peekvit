@@ -17,7 +17,13 @@ def sparsity_loss(model, **kwargs):
     
     sparsity_loss = torch.stack(sparsity_loss)
     
-    return torch.sum(sparsity_loss)
+    return torch.mean(sparsity_loss)
+
+def sparsity_loss(model, **kwargs):
+    raise NotImplementedError('Implement this function per block')
+    #TODO force each block to have sparsity, if you sum sparisity of each block, it will end up minimizing just one block and 
+    # using all the tokens for the other ones.
+    return torch.mean(sparsity_loss)
 
 
 
