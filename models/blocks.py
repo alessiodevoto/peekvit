@@ -24,7 +24,7 @@ class GumbelSoftmax(nn.Module):
         return F.one_hot(x.argmax(dim=self.dim), num_classes=x.shape[-1]).float()
 
 
-
+# A differentiable Gumbel Sigmoid module
 class GumbelSigmoid(nn.Module):
     def __init__(self, hard):
       super().__init__()
@@ -137,3 +137,52 @@ class SNRNoise(nn.Module):
         return self.forward_snr(x)
       else:
         return self.forward_std(x)
+
+
+
+
+'''class TokenNoise(nn.Module):
+    def __init__(self, p=0.5):
+        """
+        Custom dropout module.
+
+        Args:
+            p (float): Probability of an element to be zeroed. Default: 0.5
+        """
+        super(TokenNoise, self).__init__()
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, but got {}".format(p))
+        self.p = p
+
+    def forward(self, x):
+        """
+        Forward pass of the custom dropout module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying dropout.
+        """
+        if self.training:
+            # Generate a binary mask with zeros and ones based on the dropout probability
+            mask = torch.rand_like(x) > self.p
+            # Scale the output to account for dropped elements during training
+            return x * mask / (1 - self.p)
+        else:
+            # During evaluation, just return the input as is
+            return x
+
+# Example usage:
+# Create an instance of CustomDropout with a dropout probability of 0.5
+dropout_layer = CustomDropout(p=0.5)
+
+# Apply the dropout layer to an input tensor
+input_tensor = torch.randn(1, 10)
+output_tensor = dropout_layer(input_tensor)
+
+# Print the input and output tensors
+print("Input Tensor:", input_tensor)
+print("Output Tensor:", output_tensor)'''
+
+        

@@ -1,8 +1,5 @@
 from collections import OrderedDict
 import torch
-from einops import rearrange
-import numpy as np
-from typing import Tuple 
 import os  
 from datetime import datetime
 from os.path import join
@@ -77,7 +74,7 @@ def get_last_forward_gates(model):
     gates = {}
     for module_name, module in model.named_modules():
         if isinstance(module, MoE) and module.num_experts > 1:
-            gates[module_name] = module.gating_probs.detach()
+            gates[module_name] = module.gating_probs
 
     return gates
 
@@ -99,8 +96,8 @@ def get_forward_masks(model):
     from models.residualvit import ResidualModule
     masks = {}
     for module_name, module in model.named_modules():
-        if isinstance(module, ResidualModule) and module.residual is True:
-            masks[module_name] = module.mask.detach() # (batch_size, sequence_len, 1)
+        if isinstance(module, ResidualModule) and module.skip is not None:
+            masks[module_name] = module.mask # (batch_size, sequence_len, 1)
 
     return masks
 

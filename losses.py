@@ -10,12 +10,14 @@ def sparsity_loss(model, **kwargs):
     masks = get_forward_masks(model)
 
     # compute the sparsity loss
-    sparsity_loss = torch.tensor(0.0, device=get_model_device(model))
+    sparsity_loss = []
     for _, mask in masks.items():
         # compute the sparsity loss for each mask
-        sparsity_loss = sparsity_loss + torch.sum(mask) ** 2
+        sparsity_loss.append(torch.sum(mask) / mask.numel())
     
-    return torch.mean(sparsity_loss)
+    sparsity_loss = torch.stack(sparsity_loss)
+    
+    return torch.sum(sparsity_loss)
 
 
 

@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import math
-from typing import Optional, List, Union, Literal
+from typing import Optional, List, Union
 from abc import ABC
 from einops import reduce
 
@@ -13,37 +13,12 @@ A Vision Transformer with Residual Gating which can be placed at any layer.
 The residual gating is implemented as a learnable vector for each token.
 """
 
-class ResidualGateGumbel(nn.Module):
-    def __init__(self, hidden_dim, temp=1.0):
-        super().__init__()
-        self.projection = nn.Linear(hidden_dim, 1)
-        self.gate = GumbelSigmoid(hard=True)
-        self.temp = temp
-
-    def forward(self, x):
-        mask_log = self.projection(x) / self.temp
-        mask = self.gate(mask_log)
-        return mask
-
-
-class ResidualGateSigmoid(nn.Module):
-    def __init__(self, hidden_dim, temp=1.0):
-        super().__init__()
-        self.projection = nn.Linear(hidden_dim, 1)
-        self.temp = temp
-
-    def forward(self, x):
-        mask_log = self.projection(x) / self.temp
-        mask = F.relu(torch.sigmoid(mask_log) - 0.5)
-        return mask
-
-
 class ResidualModule(ABC, nn.Module):
   pass
 
 
 # ViT Block
-class ResidualViTBlock(ResidualModule):
+class ViTBlock(nn.Module):
     """Transformer encoder block."""
 
     def __init__(
@@ -53,15 +28,9 @@ class ResidualViTBlock(ResidualModule):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
-        temp: float = 1.0,
-        add_input: bool = False,
-        num_class_tokens: int = 1,
-        num_registers: int = 0,
-        skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
     ):
         super().__init__()
         self.num_heads = num_heads
-        self.num_special_tokens = num_class_tokens + num_registers
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
@@ -72,81 +41,9 @@ class ResidualViTBlock(ResidualModule):
         self.ln_2 = nn.LayerNorm(hidden_dim)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
-        # residual settings
-        self.skip = skip
-        if skip in {'attention', 'mlp', 'attention+mlp'}:
-            self.temp = temp
-            self.add_input = add_input
-            self.residual_gate = ResidualGateGumbel(hidden_dim, temp=temp)
+    def forward(self, input: torch.Tensor):
+        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
-
-    def forward_skip_attention(self, input: torch.Tensor):
-        # we should mask only non special tokens
-        special_tokens = input[:, :self.num_special_tokens, :]
-        img_tokens = input[:, self.num_special_tokens:, :]
-
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens)
-        masked_tokens = self.mask * img_tokens
-
-        # concatenate special tokens and masked input
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-
-        x = self.ln_1(masked_input)
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-
-        y = self.ln_2(x)
-        y = self.mlp(y)
-
-        return y 
-
-    def forward_skip_mlp(self, input: torch.Tensor):
-
-        x = self.ln_1(input)
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-        
-        # we should mask only non special tokens
-        special_tokens = x[:, :self.num_special_tokens, :]
-        img_tokens = x[:, self.num_special_tokens:, :]
-
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens)
-        masked_tokens = self.mask * img_tokens
-
-        # concatenate special tokens and masked input
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-        y = self.ln_2(masked_input)
-        y = self.mlp(y)
-
-        if self.add_input:
-            y = y + x
-
-
-    def forward_skip_attention_mlp(self, input: torch.Tensor):
-        
-        # we should mask only non special tokens
-        special_tokens = input[:, :self.num_special_tokens, :]
-        img_tokens = input[:, self.num_special_tokens:, :]
-
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens)
-        masked_tokens = self.mask * img_tokens
-
-        # concatenate special tokens and masked input
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-
-        # plain forward
-        y = self.plain_forward(masked_input)
-
-        if self.add_input:
-            y = y + input
-        return y
-
-    def plain_forward(self, input: torch.Tensor):
         x = self.ln_1(input)
         x = self.self_attention(x)
         x = self.dropout(x)
@@ -157,18 +54,81 @@ class ResidualViTBlock(ResidualModule):
         return x + y
 
 
+class ResidualViTBlock(ViTBlock, ResidualModule):
+    def __init__(
+        self,
+        num_heads: int,
+        hidden_dim: int,
+        mlp_dim: int,
+        dropout: float,
+        attention_dropout: float,
+        temp: float = 1.0,
+        residual: bool = True,
+        add_input: bool = False,
+        threshold: Union[float, str] = 'auto',
+        num_class_tokens: int = 1,
+        num_registers: int = 0,
+    ):
+        super().__init__(
+        num_heads,
+        hidden_dim,
+        mlp_dim,
+        dropout,
+        attention_dropout,               
+        )
+        
+        self.residual = residual
+        self.num_class_tokens = num_class_tokens
+        self.num_registers = num_registers
+        self.num_special_tokens = num_class_tokens + num_registers
+
+        if self.residual is True: 
+            self.residual_gate = nn.Linear(hidden_dim, 1)
+            self.temp = temp
+            # threshold is a learnable parameter or a float
+            self.threshold = threshold if isinstance(threshold, float) else torch.nn.Parameter(torch.tensor(0.5))
+            self.add_input = add_input
+            self.gate = GumbelSigmoid(hard=True)
+            self.ln = nn.LayerNorm(hidden_dim)
+       
+    
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-
-        if self.skip == 'attention':
-            return self.forward_skip_attention(input)
-        elif self.skip == 'mlp':
-            return self.forward_skip_mlp(input)
-        elif self.skip == 'attention+mlp':
-            return self.forward_skip_attention_mlp(input)
+        if self.residual is True:
+            return self.forward_residual(input)
         else:
-            return self.plain_forward(input)
+            return self.forward_no_residual(input)
 
+
+    def forward_residual(self, input: torch.Tensor):
+        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+
+        # we should mask only non special tokens
+        special_tokens = input[:, :self.num_special_tokens, :]
+        other_tokens = input[:, self.num_special_tokens:, :]
+        
+        # residual gating, here we learn a scalar for each token
+        """mask = torch.sigmoid(self.residual_gate(masked_input) / self.temp)
+        self.mask = nn.functional.relu(mask - self.threshold)"""
+
+        mask_log = self.residual_gate(other_tokens) / self.temp
+        # print(mask_log.shape)
+        self.mask = self.gate(mask_log)
+        # print(self.mask.shape)
+        # print(self.mask)
+        
+        # concatenate special tokens and masked input
+        masked_input = torch.cat([special_tokens, self.mask * other_tokens], dim=1)
+
+        # forward pass through ViTBlock
+        x = super().forward(masked_input)
+
+        return x + self.ln(input) if self.add_input else x
+    
+    def forward_no_residual(self, input: torch.Tensor):
+        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+        x = super().forward(input)
+        return  x
 
 
 # ViT Encoder
@@ -185,6 +145,7 @@ class ResidualViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         residual_layers: Optional[List] = None,
+        threshold: Union[float, str] = 'auto',
         add_input: bool = False,
         num_class_tokens: int = 1,
         num_registers: int = 0,
@@ -207,7 +168,8 @@ class ResidualViTEncoder(nn.Module):
                             mlp_dim,
                             dropout,
                             attention_dropout,
-                            skip = residual_layers[i],
+                            residual = residual_layers[i],
+                            threshold=threshold,
                             add_input=add_input,
                             num_class_tokens=num_class_tokens,
                             num_registers=num_registers,
@@ -260,7 +222,7 @@ class ResidualVisionTransformer(nn.Module):
         self.threshold = threshold
         
         # assume all layers are residual by default
-        self.residual_layers = residual_layers or ['attention'] * num_layers
+        self.residual_layers = residual_layers or [True] * num_layers
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
 
@@ -285,8 +247,9 @@ class ResidualVisionTransformer(nn.Module):
             mlp_dim,
             dropout,
             attention_dropout,
-            residual_layers=self.residual_layers,
-            add_input=add_input
+            self.residual_layers,
+            threshold,
+            add_input
             )
 
 

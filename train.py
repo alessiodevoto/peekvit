@@ -43,7 +43,7 @@ model_args = {
         'attention_dropout': 0.1,
         # 'mlp_moes': [1,1,1,2],
         # 'attn_moes': [1,1,1,1],
-        'residual_layers': [True, True, True, True],
+        'residual_layers': ['attention', 'attention', 'attention', 'attention'],
         'num_registers': 0,
         'threshold': 0.5,
         'num_class_tokens': 1,
@@ -58,7 +58,7 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 5,
     'additional_loss': 'sparsity',
-    'additional_loss_weight': 0.01,
+    'additional_loss_weight': 0.000001,
     'additional_loss_args': {}
 }
 
@@ -187,7 +187,7 @@ def visualize_experts(run_dir, epoch=None):
 if __name__ == '__main__':
     run_dir = make_experiment_directory(BASE_PATH) # if you just want to visualize some images, set this to the path of a run
     train(run_dir)
-    # run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_16_16_51_42'
+    #run_dir = '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_16_19_32_26'
     visualize_predictions(run_dir)
     # visualize_experts(run_dir)
 
