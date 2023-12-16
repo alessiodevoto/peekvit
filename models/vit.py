@@ -7,6 +7,7 @@ from typing import Optional, List
 from abc import ABC
 
 from .blocks import SelfAttention, MLP
+from einops import reduce
  
 """
 Plain Vision Transformer.
@@ -90,7 +91,7 @@ class ViTEncoder(nn.Module):
         return self.ln(input)
 
 
-# ViT MoE
+
 class VisionTransformer(nn.Module):
     """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
 
@@ -107,6 +108,7 @@ class VisionTransformer(nn.Module):
         num_classes: int = 1000,
         representation_size: Optional[int] = None,
         num_registers: int = 0,
+        num_class_tokens: int = 1,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -120,6 +122,7 @@ class VisionTransformer(nn.Module):
         self.representation_size = representation_size
         self.num_heads = num_heads
         self.num_registers = num_registers
+        self.num_class_tokens = num_class_tokens
 
 
 
@@ -127,9 +130,9 @@ class VisionTransformer(nn.Module):
 
         seq_length = (image_size // patch_size) ** 2
 
-        # Add a class token
-        self.class_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
-        seq_length += 1
+        # Add class tokens
+        self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
+        seq_length += num_class_tokens
 
         # Add registers
         if num_registers > 0:
@@ -190,16 +193,19 @@ class VisionTransformer(nn.Module):
         if self.num_registers > 0:
             batch_register_tokens = self.register_tokens.expand(n, -1, -1)
             x = torch.cat([x, batch_register_tokens], dim=1)
-
+        
         # Expand the class token to the full batch
-        batch_class_token = self.class_token.expand(n, -1, -1)
-        x = torch.cat([batch_class_token, x], dim=1)
+        batch_class_tokens = self.class_tokens.expand(n, -1, -1)
+        x = torch.cat([x, batch_class_tokens], dim=1)
 
+        # Pass through the encoder
         x = self.encoder(x)
 
-        # Classifier "token" as used by standard language architectures
-        x = x[:, 0]
+        # Get all class tokens and average them
+        x = x[:, 0:self.num_class_tokens]
+        x = reduce(x, 'n c e -> n e', reduction='mean')
 
+        # Classification head
         x = self.head(x)
 
         return x

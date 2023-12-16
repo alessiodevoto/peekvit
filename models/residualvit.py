@@ -6,7 +6,7 @@ from typing import Optional, List, Union
 from abc import ABC
 from einops import reduce
 
-from .blocks import SelfAttention, MLP
+from .blocks import SelfAttention, MLP, GumbelSigmoid
 
 """
 A Vision Transformer with Residual Gating which can be placed at any layer.
@@ -54,7 +54,7 @@ class ViTBlock(nn.Module):
         return x + y
 
 
-class ViTBlockResidual(ViTBlock, ResidualModule):
+class ResidualViTBlock(ViTBlock, ResidualModule):
     def __init__(
         self,
         num_heads: int,
@@ -65,7 +65,9 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         temp: float = 1.0,
         residual: bool = True,
         add_input: bool = False,
-        threshold: Union[float, str] = 'auto'
+        threshold: Union[float, str] = 'auto',
+        num_class_tokens: int = 1,
+        num_registers: int = 0,
     ):
         super().__init__(
         num_heads,
@@ -76,12 +78,17 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
         )
         
         self.residual = residual
+        self.num_class_tokens = num_class_tokens
+        self.num_registers = num_registers
+        self.num_special_tokens = num_class_tokens + num_registers
+
         if self.residual is True: 
             self.residual_gate = nn.Linear(hidden_dim, 1)
             self.temp = temp
             # threshold is a learnable parameter or a float
             self.threshold = threshold if isinstance(threshold, float) else torch.nn.Parameter(torch.tensor(0.5))
             self.add_input = add_input
+            self.gate = GumbelSigmoid(hard=True)
        
     
     def forward(self, input: torch.Tensor):
@@ -92,17 +99,30 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
             return self.forward_no_residual(input)
 
 
-    def forward_residual(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+    def forward_residual(self, masked_input: torch.Tensor):
+        torch._assert(masked_input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {masked_input.shape}")
+
+        # we should mask only non special tokens
+        special_tokens = masked_input[:, :self.num_special_tokens, :]
+        masked_input = masked_input[:, self.num_special_tokens:, :]
         
         # residual gating, here we learn a scalar for each token
-        mask = torch.sigmoid(self.residual_gate(input) / self.temp)
-        self.mask = nn.functional.relu(mask - self.threshold)
+        """mask = torch.sigmoid(self.residual_gate(masked_input) / self.temp)
+        self.mask = nn.functional.relu(mask - self.threshold)"""
+
+        mask_log = self.residual_gate(masked_input) / self.temp
+        # print(mask_log.shape)
+        self.mask = self.gate(mask_log)
+        # print(self.mask.shape)
+        # print(self.mask)
+        
+        # concatenate special tokens and masked input
+        masked_input = torch.cat([special_tokens, self.mask * masked_input], dim=1)
 
         # forward pass through ViTBlock
-        x = super().forward(self.mask * input)
+        x = super().forward(masked_input)
 
-        return x + input if self.add_input else x
+        return x + masked_input if self.add_input else x
     
     def forward_no_residual(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -111,7 +131,7 @@ class ViTBlockResidual(ViTBlock, ResidualModule):
 
 
 # ViT Encoder
-class ViTEncoder(nn.Module):
+class ResidualViTEncoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
     def __init__(
@@ -125,17 +145,23 @@ class ViTEncoder(nn.Module):
         attention_dropout: float,
         residual_layers: Optional[List] = None,
         threshold: Union[float, str] = 'auto',
-        add_input: bool = False
+        add_input: bool = False,
+        num_class_tokens: int = 1,
+        num_registers: int = 0,
 
     ):
         super().__init__()
-        # Note that batch_size is on the first dim because
-        # we have batch_first=True in nn.MultiAttention() by default
+        
+        self.num_layers = num_layers
+        self.num_class_tokens  = num_class_tokens
+        self.num_registers = num_registers
+        self.num_special_tokens = num_class_tokens + num_registers
+
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
         layers:List = []
         for i in range(num_layers):
-            layers.append(ViTBlockResidual(
+            layers.append(ResidualViTBlock(
                             num_heads,
                             hidden_dim,
                             mlp_dim,
@@ -143,7 +169,9 @@ class ViTEncoder(nn.Module):
                             attention_dropout,
                             residual = residual_layers[i],
                             threshold=threshold,
-                            add_input=add_input
+                            add_input=add_input,
+                            num_class_tokens=num_class_tokens,
+                            num_registers=num_registers,
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -199,7 +227,7 @@ class ResidualVisionTransformer(nn.Module):
 
         seq_length = (image_size // patch_size) ** 2
 
-        # Add a class token
+        # Add class tokens
         self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
         seq_length += num_class_tokens
 
@@ -207,8 +235,10 @@ class ResidualVisionTransformer(nn.Module):
         if num_registers > 0:
             self.register_tokens = nn.Parameter(torch.zeros(1, num_registers, hidden_dim))
             seq_length += num_registers
+        
+        self.num_special_tokens = num_class_tokens + num_registers
 
-        self.encoder = ViTEncoder(
+        self.encoder = ResidualViTEncoder(
             seq_length,
             num_layers,
             num_heads,

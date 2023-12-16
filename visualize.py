@@ -172,7 +172,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
 
     # retrieve last forward masks
     gates = get_forward_masks(model)  # <moe, gating_probs>
-
+    
     # prepare plot, we want a row for each residual layer,
     # and two columns, one for the image and one for token masks
     fig, axs = plt.subplots(len(gates.keys())+1, 1, squeeze=False, figsize=(10, 25))
@@ -184,7 +184,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
 
-      forward_mask = forward_mask[:, num_class_tokens+num_registers:].reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
+      forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       # replace non-zero values with 1
       forward_mask[forward_mask != 0] = 1
       forward_mask = prepare_for_matplotlib(forward_mask)

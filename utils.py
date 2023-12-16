@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 from os.path import join
 from models.models import build_model
+from pprint import pprint
 
 
 def make_experiment_directory(base_path):
@@ -180,6 +181,8 @@ def load_state(path, model=None, optimizer=None):
         
     return model, optimizer, state['epoch']
 
+def initialize_residual_vit_from_vit(vit_model, residual_model):
+    pass
 
 class SimpleLogger:
     """
@@ -192,8 +195,8 @@ class SimpleLogger:
         self.log_file = open(log_file_path, 'w')
     
     def log(self, *args, **kwargs):
-        print(*args, **kwargs)
-        print(*args, **kwargs, file=self.log_file)
+        pprint(*args, **kwargs)
+        pprint(*args, **kwargs, stream=self.log_file)
         self.log_file.flush()
     
     def close(self):

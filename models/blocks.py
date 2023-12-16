@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn.functional import gumbel_softmax, sigmoid
 
+
 """
 A set of nn Modules for various use cases.
 """
@@ -21,6 +22,37 @@ class GumbelSoftmax(nn.Module):
       else:
          # at inference time, we use the argmax of the gumbel softmax
         return F.one_hot(x.argmax(dim=self.dim), num_classes=x.shape[-1]).float()
+
+
+
+class GumbelSigmoid(nn.Module):
+    def __init__(self, hard):
+      super().__init__()
+      self.hard = hard
+    
+    @staticmethod
+    def gumbel_sigmoid(logits: torch.Tensor, tau: float = 1, hard: bool = False, eps: float = 1e-10):
+      gumbels = -torch.empty_like(logits).exponential_().log()  # ~Gumbel(0,1)
+      gumbels = (logits + gumbels) / tau  # ~Gumbel(logits,tau)
+      y_soft = torch.sigmoid(gumbels)
+
+      if hard:
+          # Straight through.
+          y_hard = torch.round(y_soft)
+          ret = y_hard - y_soft.detach() + y_soft
+      else:
+          # Reparametrization trick.
+          ret = y_soft
+      return ret
+
+    def forward(self, x):
+      # check if model is in training mode
+      if self.training:
+        return self.gumbel_sigmoid(x, hard = self.hard)
+      else:
+        # at inference, we use a hard threshold
+        return torch.round(torch.sigmoid(x))
+
 
 
 # A differentiable Sigmoid with temperature module
