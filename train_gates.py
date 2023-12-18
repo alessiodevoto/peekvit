@@ -26,9 +26,6 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-num_epochs = 10
-eval_every = 5
-checkpoint_every = 5
 
 # model_class = 'VisionTransformerMoE'
 model_class = 'ResidualVisionTransformer'
@@ -58,11 +55,11 @@ training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-4,
-    'num_epochs': 60,
+    'num_epochs':60,
     'eval_every': 5,
-    'checkpoint_every': 20,
-    'additional_loss': 'sparsity',
-    'additional_loss_weight': 0.01,
+    'checkpoint_every': 5,
+    'additional_loss': 'sparsity_per_block',
+    'additional_loss_weight': 1,
     'additional_loss_args': {}
 }
 
@@ -70,7 +67,7 @@ gate_args = {
     'skip': 'attention+mlp',
     'temp': 0.1,
     'add_input': True,
-    'gate_type': 'gumbel',
+    'gate_type': 'sigmoid',
 }
 
 
@@ -113,18 +110,28 @@ def train(run_dir, load_from=None):
     regularization_weight = training_args['additional_loss_weight']
 
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
 
     def train_epoch(model, loader, optimizer):
         model.train()
         model = train_only_gates(model)
+        running_loss, running_main_loss, running_reg, running_entr = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
-            loss = main_criterion(out, labels) + regularization(model) * regularization_weight
+            main_loss = main_criterion(out, labels)
+            reg, entr = regularization(model)
+            loss = main_loss + reg * regularization_weight + entr * 1
+            # loss = reg * regularization_weight #+ entr * 0.0001
             loss.backward()
             optimizer.step()
+            running_loss += loss.detach().item()
+            running_main_loss += main_loss.detach().item()
+            running_reg += reg.detach().item() * regularization_weight
+            running_entr += entr.detach().item() * 1
+        logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. Reg: {running_reg / len(loader)}. Entr: {running_entr / len(loader)}')
+        
     
     @torch.no_grad()
     def validate_epoch(model, loader):
@@ -143,18 +150,18 @@ def train(run_dir, load_from=None):
     for epoch in range(training_args['num_epochs']+1):
         train_epoch(model, train_loader, optimizer)
         
-        if eval_every != -1 and epoch % eval_every == 0:
+        if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
             acc = validate_epoch(model, val_loader)
-            logger.log(f'Epoch {epoch} accuracy: {acc}')
+            logger.log(f'Epoch {epoch:03} accuracy: {acc}')
 
-        if checkpoint_every != -1 and epoch % checkpoint_every == 0:
+        if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, model_args, noise_args, optimizer, epoch)
 
 
 def visualize_predictions(run_dir, epoch=None):
     
     # load model from last epoch or specified epoch
-    last_checkpoint = num_epochs if num_epochs > checkpoint_every else 0
+    last_checkpoint = training_args['num_epochs'] if training_args['num_epochs'] > training_args['checkpoint_every'] else 0
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load:03}.pth')
     model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
@@ -186,7 +193,7 @@ def visualize_predictions(run_dir, epoch=None):
 
 def visualize_experts(run_dir, model=None, epoch=None):
     # load model from last epoch or specified epoch
-    last_checkpoint = num_epochs if num_epochs > checkpoint_every else 0
+    last_checkpoint = training_args['num_epochs'] if training_args['num_epochs'] > training_args['checkpoint_every'] else 0
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load}.pth')
     model, optimizer, epoch = load_state(checkpoint_path, model=model, optimizer=None)    
@@ -205,6 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--plot', action='store_true')
     parser.add_argument('--run_dir', type=str, default=None)
+    parser.add_argument('--epoch', type=str, default=None)
     args = parser.parse_args()
     if args.train:
         train_run_dir = make_experiment_directory(BASE_PATH)
@@ -212,7 +220,7 @@ if __name__ == '__main__':
         visualize_predictions(train_run_dir)
     elif args.plot:
         run_dir = args.run_dir
-        visualize_predictions(run_dir)
+        visualize_predictions(run_dir, epoch=args.epoch)
         # visualize_experts(run_dir)
     
 

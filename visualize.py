@@ -142,7 +142,7 @@ def display_expert_embeddings(model, save_dir):
 
 
 @torch.no_grad()
-def img_mask_distribution(model, images: List, subset, transform: Optional[None] = None, save_dir: str = None):
+def img_mask_distribution(model, images: List, subset, transform: Optional[None] = None, save_dir: str = None, hard: bool = False):
   """
   Plot the expert distribution masks for each layer of a given model.
 
@@ -186,7 +186,8 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
 
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       # replace non-zero values with 1
-      forward_mask[forward_mask != 0] = 1
+      if hard:
+        forward_mask[forward_mask != 0] = 1
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
       axs[layer_idx+1,0].title.set_text(layer_name)
