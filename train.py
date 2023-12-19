@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils import SimpleLogger, make_experiment_directory, save_state, load_state, add_noise
+from utils.utils import SimpleLogger, make_experiment_directory, save_state, load_state, add_noise
 from peekvit.dataset import get_imagenette
 from models.models import build_model
 from peekvit.losses import get_loss

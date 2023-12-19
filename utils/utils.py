@@ -180,7 +180,21 @@ def load_state(path, model=None, optimizer=None):
 
 
 
-def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
+######################################################## Model editing ##################################################################
+
+
+
+'''def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
+    """
+    Converts a ViT block to a ResidualViT block.
+
+    Args:
+        vitblock: The ViT block to be converted.
+        residualvitblock_args: Additional arguments for initializing the ResidualViT block.
+
+    Returns:
+        The converted ResidualViT block.
+    """
     # transform a vit model to a residualvit model
     from models.residualvit import ResidualViTBlock
 
@@ -192,7 +206,7 @@ def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
         dropout=vitblock.dropout.p,
         attention_dropout=vitblock.self_attention.self_attention.dropout,
         **residualvitblock_args
-        )
+    )
 
     # copy weights from vit block to residualvit block
     residual_block.ln_1 = vitblock.ln_1
@@ -201,7 +215,7 @@ def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
     residual_block.ln_2 = vitblock.ln_2
     residual_block.mlp = vitblock.mlp
 
-    return residual_block
+    return residual_block'''
 
 
 def add_residual_gates(residualvit_model, residual_gates_args):
@@ -255,20 +269,4 @@ def reinit_class_token(model):
             torch.nn.init.normal_(param, mean=0.0, std=0.02)
     return model
 
-class SimpleLogger:
-    """
-    Simple logger for logging to stdout and to a file.
-    """
-    def __init__(self, log_file_path):
-        self.log_file_path = log_file_path
-        if not os.path.exists(os.path.dirname(log_file_path)):
-            os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
-        self.log_file = open(log_file_path, 'w')
-    
-    def log(self, *args, **kwargs):
-        pprint(*args, **kwargs)
-        pprint(*args, **kwargs, stream=self.log_file)
-        self.log_file.flush()
-    
-    def close(self):
-        self.log_file.close()
+

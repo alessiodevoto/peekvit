@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from os.path import join
 import numpy as np
 
-from utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks
+from utils.utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks
 
 ######################################################## Utils ##################################################################
 

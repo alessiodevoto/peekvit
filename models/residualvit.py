@@ -75,12 +75,12 @@ class ResidualViTBlock(ResidualModule):
             self.residual_gate = ResidualGate(hidden_dim, temp=temp, gate_type=gate_type)
 
         # Attention block
-        self.ln_1 = nn.LayerNorm(hidden_dim)
+        self.ln_1 = nn.LayerNorm(hidden_dim, eps=1e-06)
         self.self_attention = SelfAttention(hidden_dim, num_heads, dropout=attention_dropout)
         self.dropout = nn.Dropout(dropout)
 
         # MLP block
-        self.ln_2 = nn.LayerNorm(hidden_dim)
+        self.ln_2 = nn.LayerNorm(hidden_dim, eps=1e-06)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
 
@@ -271,7 +271,7 @@ class ResidualVisionTransformer(nn.Module):
         self.threshold = threshold
         
         # assume all layers are residual by default
-        self.residual_layers = residual_layers or ['attention'] * num_layers
+        self.residual_layers = residual_layers or [None] * num_layers
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
 

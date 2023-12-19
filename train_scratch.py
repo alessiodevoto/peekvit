@@ -9,9 +9,9 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates, reinit_class_token
-from utils.logging import SimpleLogger
+from utils.utils import  make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates, reinit_class_token
 from peekvit.dataset import get_imagenette
+from utils.logging import SimpleLogger
 from models.models import build_model
 from peekvit.losses import get_loss
 
@@ -29,8 +29,8 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # model_class = 'VisionTransformerMoE'
-# model_class = 'ResidualVisionTransformer'
-model_class = 'VisionTransformer'
+model_class = 'ResidualVisionTransformer'
+# model_class = 'VisionTransformer'
 
 model_args = {
         'image_size': 160,
@@ -44,10 +44,10 @@ model_args = {
         'attention_dropout': 0.1,
         # 'mlp_moes': [1,1,1,2],
         # 'attn_moes': [1,1,1,1],
-        #'residual_layers': ['attention', 'attention', 'attention', 'attention'],
+        'residual_layers': ['none', 'none', 'none', 'none'],
         #'num_registers': 0,
         #'threshold': 0.5,
-        #'num_class_tokens': 4,
+        'num_class_tokens': 1,
         #'add_input': True,
         #'gate_type': 'gumbel',
     }
@@ -57,27 +57,27 @@ training_args = {
     'eval_batch_size': 128,
     'lr': 1e-4,
     'num_epochs': 200,
-    'eval_every': 10,
+    'eval_every': 5,
     'checkpoint_every': 20,
     'additional_loss': None, #'sparsity_per_block',
     'additional_loss_weight': 1,
     'additional_loss_args': {}
 }
 
-gate_args = {
+"""gate_args = {
     'skip': 'attention+mlp',
     'temp': 0.1,
     'add_input': True,
     'gate_type': 'gumbel',
-}
+}"""
 
 
-noise_args = {
+"""noise_args = {
     'noise_type': 'gaussian',
     'snr': 1,
     'std': None,
     'layers': [2]
-}
+}"""
 
 noise_args = None
 
@@ -89,7 +89,7 @@ def train(run_dir, load_from=None):
     logger = SimpleLogger(join(run_dir, 'logs.txt'))
     logger.log(f'Experiment name: {run_dir}')
     logger.log(noise_args)
-    logger.log(gate_args)
+    # logger.log(gate_args)
     logger.log(training_args)
 
     train_dataset, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
@@ -98,13 +98,16 @@ def train(run_dir, load_from=None):
 
     
     # get last checkpoint in the load_from directory
-    load_from = join(load_from, 'checkpoints')
-    last_checkpoint = sorted(os.listdir(load_from))[-1]
-    load_from = join(load_from, last_checkpoint)
-    logger.log(f'Loading model from {load_from}')
-    model, _, epoch = load_state(load_from, model=None, optimizer=None)
-    model = add_residual_gates(model, gate_args)
-    model = reinit_class_token(model)
+    if load_from is not None:
+        load_from = join(load_from, 'checkpoints')
+        last_checkpoint = sorted(os.listdir(load_from))[-1]
+        load_from = join(load_from, last_checkpoint)
+        logger.log(f'Loading model from {load_from}')
+        model, _, epoch = load_state(load_from, model=None, optimizer=None)
+        # model = add_residual_gates(model, gate_args)
+        # model = reinit_class_token(model)
+    else:
+        model = build_model(model_class, model_args, noise_args)
    
     main_criterion = torch.nn.CrossEntropyLoss()
     regularization = get_loss(training_args['additional_loss'], {})
@@ -115,22 +118,22 @@ def train(run_dir, load_from=None):
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_gates(model)
+        # model = train_only_gates(model)
         running_loss, running_main_loss, running_reg, running_entr = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels)
-            reg, entr = regularization(model)
-            loss = main_loss + reg * regularization_weight + entr * 1
+            # reg, entr = regularization(model)
+            loss = main_loss #+ reg * regularization_weight + entr * 1
             # loss = reg * regularization_weight #+ entr * 0.0001
             loss.backward()
             optimizer.step()
             running_loss += loss.detach().item()
             running_main_loss += main_loss.detach().item()
-            running_reg += reg.detach().item() * regularization_weight
-            running_entr += entr.detach().item() * 1
+            # running_reg += reg.detach().item() * regularization_weight
+            # running_entr += entr.detach().item() * 1
         logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. Reg: {running_reg / len(loader)}. Entr: {running_entr / len(loader)}')
         
     
