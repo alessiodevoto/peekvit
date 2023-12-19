@@ -251,7 +251,7 @@ def freeze_module(module):
             freeze_module(module)
     return residualvit_model"""
 
-def train_only_gates(residualvit_model):
+def train_only_gates_and_cls_token(residualvit_model):
     # freeze all parameters except the gates
     for param_name, param in residualvit_model.named_parameters():
         if 'gate' or 'class' in param_name:
@@ -261,12 +261,13 @@ def train_only_gates(residualvit_model):
             param.requires_grad = False
     return residualvit_model
 
-def reinit_class_token(model):
+def reinit_class_tokens(model):
     # reinitialize the class token
     for param_name, param in model.named_parameters():
         if 'class' in param_name:
             print(f'Reinitializing {param_name}')
             torch.nn.init.normal_(param, mean=0.0, std=0.02)
+            print('Reinitialized')
     return model
 
 

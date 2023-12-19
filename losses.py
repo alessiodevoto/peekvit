@@ -3,77 +3,172 @@ from utils.utils import get_model_device, get_forward_masks
 from einops import reduce
 from torch.nn.functional import cross_entropy
 from torch.special import entr
+from abc import ABC, abstractmethod
+from typing import Literal
 
 
-
-
-def sparsity_loss(model, **kwargs):
+class ResidualModelLoss(torch.nn.Module, ABC):
     
-    # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
+    @abstractmethod
+    def forward(self, model, **kwargs):
+        pass
+
+
+####################################################### functional implementations ##################################################################
+
+
+def sparsity_loss_per_block(model, budget: float = 0.65, sparsity_type : Literal['l1', 'mse', 'cross_entropy' ] = 'l1', **kwargs):
+    """
+    Computes the sparsity loss per block.
+
+    Args:
+        model: The model for which to compute the sparsity loss.
+        budget (float): The desired sparsity level.
+        sparsity_type (str): The type of sparsity loss to compute, 
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Tuple: A tuple containing the mean sparsity loss and the mean intra-entropy.
+    """
+    
     masks = get_forward_masks(model)
 
     # compute the sparsity loss
     sparsity_loss = []
-    for _, mask in masks.items():
-        # compute the sparsity loss for each mask
-        sparsity_loss.append(torch.sum(mask) / mask.numel())
-    
-    sparsity_loss = torch.stack(sparsity_loss)
-    
-    return torch.mean(sparsity_loss)
-
-
-def sparsity_loss_per_block(model, budget: float = 0.65, **kwargs):
-    # raise NotImplementedError('Implement this function per block')
-    #TODO force each block to have sparsity, if you sum sparisity of each block, it will end up minimizing just one block and 
-    # using all the tokens for the other ones.
-    # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
-    masks = get_forward_masks(model)
-
-    # compute the sparsity loss
-    sparsity_loss = []
-    entropy_loss = []
+    intra_entropy = []
     for _, mask in masks.items():
         # compute the sparsity loss for each sequence in the batch 
         # mask only contains 1s and 0s, so the mean is the sparsity
         sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
-        # print(sparsity.mean())
         
-        # force sparsity to be close to budget with mse
-        # sparsity_loss.append(torch.mean((sparsity - budget) ** 2))
-        
-        # force sparsity to be close to budget with cross entropy
-        # sparsity_loss.append(cross_entropy(sparsity, torch.tensor([budget] * sparsity.shape[0]).to(get_model_device(model))))
-
-        # force sparsity to be close to budget with l1
-        sparsity_loss.append(torch.mean(torch.abs(sparsity - budget)))
+        if sparsity_type == 'mse':
+            # force sparsity to be close to budget with mse
+            sparsity_loss.append(torch.mean((sparsity - budget) ** 2))
+        if sparsity_type == 'cross_entropy':
+            # force sparsity to be close to budget with cross entropy
+            sparsity_loss.append(cross_entropy(sparsity, torch.tensor([budget] * sparsity.shape[0]).to(get_model_device(model))))
+        elif sparsity_type == 'l1':
+            # force sparsity to be close to budget with l1
+            sparsity_loss.append(torch.mean(torch.abs(sparsity - budget)))
 
         # force sparsity inside image by maximizing entropy
         # print(sparsity)
-        entropy_loss.append(entr(sparsity))
+        intra_entropy.append(entr(sparsity))
         
 
 
     sparsity_loss = torch.stack(sparsity_loss)
-    # print(sparsity_loss)
-
-    entropy_loss = torch.stack(entropy_loss)
-    # print(entropy_loss)
-
-    # add entropy here to force the sparsity to be more uniform
-    # entropy = - sum_i p_i log(p_i)
-    # entr = - torch.sum(sparsity_loss * torch.log(sparsity_loss))
-    # print(entr)
-
-    return torch.mean(sparsity_loss), torch.mean(entropy_loss)
+    intra_entropy = torch.stack(intra_entropy)
 
 
+    return torch.mean(sparsity_loss), torch.mean(intra_entropy)
 
+
+def entropy_per_blocks(model, **kwargs):
+
+    # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
+    masks = get_forward_masks(model)
+
+    # compute the sparsity loss
+    intra_entopy = []
+    for _, mask in masks.items():
+        # compute the sparsity loss for each mask
+        sparsity = reduce(mask, 'b s 1 -> b', 'mean')
+        intra_entopy.append(entr(sparsity))
+    
+    intra_entopy = torch.stack(intra_entopy)
+    inter_entropy = entr(intra_entopy)
+
+    return torch.mean(intra_entopy), torch.mean(inter_entropy),
+
+def solo_l1(model, budget: float = 0.65, **kwargs):
+
+    # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
+    masks = get_forward_masks(model)
+
+    # iterate over masks
+    sparsity_loss = []
+    for _, mask in masks.items():
+        sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
+        sparsity_loss.append(torch.mean(torch.abs(sparsity - budget)))
+    
+    sparsity_loss = torch.stack(sparsity_loss)
+
+    inter_sparsity = entr(sparsity_loss)
+
+    return torch.mean(sparsity_loss),  torch.mean(inter_sparsity)
+
+def solo_mse(model, budget: float = 0.65, **kwargs):
+    
+        # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
+        masks = get_forward_masks(model)
+    
+        # iterate over masks
+        sparsity_loss = []
+        for _, mask in masks.items():
+            sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
+            sparsity_loss.append(torch.mean((sparsity - budget) ** 2))
+        
+        sparsity_loss = torch.stack(sparsity_loss)
+    
+        inter_sparsity = entr(sparsity_loss)
+    
+        return torch.mean(sparsity_loss),  torch.mean(inter_sparsity)
+
+
+####################################################### class implementations ##################################################################
+
+class SparsityLoss(ResidualModelLoss):
+    """
+    Computes the sparsity loss of the model.
+    """
+
+    def __init__(self, budget: float) -> None:
+        super().__init__()
+        self.budget = budget
+
+    def forward(self, model, **kwargs):
+        """
+        Computes the sparsity loss of the model.
+
+        Args:
+            model (nn.Module): The model to compute the sparsity loss for.
+            **kwargs: Additional arguments.
+
+        Returns:
+            torch.Tensor: The sparsity loss.
+        """
+        return sparsity_loss_per_block(model, budget=self.budget, **kwargs)
+
+
+class EntropyLoss(ResidualModelLoss):
+    """
+    Computes the entropy loss of the model.
+    """
+
+    def __init__(self, budget: float) -> None:
+        super().__init__()
+        self.budget = budget
+
+    def forward(self, model, **kwargs):
+        """
+        Computes the entropy loss of the model.
+
+        Args:
+            model (nn.Module): The model to compute the entropy loss for.
+            **kwargs: Additional arguments.
+
+        Returns:
+            torch.Tensor: The entropy loss.
+        """
+        return entropy_per_blocks(model)
 
 
 LOSSES_MAP = {
-    'sparsity': sparsity_loss,
     'sparsity_per_block': sparsity_loss_per_block,
+    'entropy': entropy_per_blocks,
+    'solo_l1': solo_l1,
+    'solo_mse': solo_mse,
 }
 
 

@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils.utils import  make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates, reinit_class_token
+from utils.utils import  make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates_and_cls_token, reinit_class_tokens
 from peekvit.dataset import get_imagenette
 from utils.logging import SimpleLogger
 from models.models import build_model

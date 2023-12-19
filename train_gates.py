@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates, reinit_class_token
+from utils.utils import make_experiment_directory, save_state, load_state, add_residual_gates, train_only_gates_and_cls_token, reinit_class_tokens
 from utils.logging import SimpleLogger
 from peekvit.dataset import get_imagenette
 from models.models import build_model
@@ -29,8 +29,8 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # model_class = 'VisionTransformerMoE'
-# model_class = 'ResidualVisionTransformer'
-model_class = 'VisionTransformer'
+model_class = 'ResidualVisionTransformer'
+# model_class = 'VisionTransformer'
 
 model_args = {
         'image_size': 160,
@@ -44,23 +44,23 @@ model_args = {
         'attention_dropout': 0.1,
         # 'mlp_moes': [1,1,1,2],
         # 'attn_moes': [1,1,1,1],
-        #'residual_layers': ['attention', 'attention', 'attention', 'attention'],
-        #'num_registers': 0,
-        #'threshold': 0.5,
-        #'num_class_tokens': 4,
-        #'add_input': True,
-        #'gate_type': 'gumbel',
+        'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+        'num_registers': 0,
+        'threshold': 0.5,
+        'num_class_tokens': 1,
+        'add_input': True,
+        'gate_type': 'sigmoid',
     }
 
 training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-4,
-    'num_epochs': 200,
-    'eval_every': 10,
-    'checkpoint_every': 20,
-    'additional_loss': None, #'sparsity_per_block',
-    'additional_loss_weight': 1,
+    'num_epochs': 100,
+    'eval_every': 5,
+    'checkpoint_every': 10,
+    'additional_loss': 'solo_l1',
+    'additional_loss_weight':2,
     'additional_loss_args': {}
 }
 
@@ -68,16 +68,16 @@ gate_args = {
     'skip': 'attention+mlp',
     'temp': 0.1,
     'add_input': True,
-    'gate_type': 'gumbel',
+    'gate_type': 'sigmoid',
 }
 
 
-noise_args = {
+"""noise_args = {
     'noise_type': 'gaussian',
     'snr': 1,
     'std': None,
     'layers': [2]
-}
+}"""
 
 noise_args = None
 
@@ -93,8 +93,8 @@ def train(run_dir, load_from=None):
     logger.log(training_args)
 
     train_dataset, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
-    train_loader = DataLoader(train_dataset, batch_size=training_args['train_batch_size'], shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=training_args['eval_batch_size'], shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=training_args['train_batch_size'], shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=training_args['eval_batch_size'], shuffle=False, num_workers=4, pin_memory=True)
 
     
     # get last checkpoint in the load_from directory
@@ -104,7 +104,7 @@ def train(run_dir, load_from=None):
     logger.log(f'Loading model from {load_from}')
     model, _, epoch = load_state(load_from, model=None, optimizer=None)
     model = add_residual_gates(model, gate_args)
-    model = reinit_class_token(model)
+    model = reinit_class_tokens(model)
    
     main_criterion = torch.nn.CrossEntropyLoss()
     regularization = get_loss(training_args['additional_loss'], {})
@@ -115,23 +115,25 @@ def train(run_dir, load_from=None):
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_gates(model)
-        running_loss, running_main_loss, running_reg, running_entr = 0.0, 0.0, 0.0, 0.0
+        model = train_only_gates_and_cls_token(model)
+        running_loss, running_main_loss, running_entr1, running_entr2 = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels)
-            reg, entr = regularization(model)
-            loss = main_loss + reg * regularization_weight + entr * 1
+            entr1, entr2  = regularization(model)
+            # loss = main_loss + reg * regularization_weight + entr * +3
             # loss = reg * regularization_weight #+ entr * 0.0001
+            loss = main_loss + entr1 * 5 + entr2 * - 2
             loss.backward()
             optimizer.step()
             running_loss += loss.detach().item()
             running_main_loss += main_loss.detach().item()
-            running_reg += reg.detach().item() * regularization_weight
-            running_entr += entr.detach().item() * 1
-        logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. Reg: {running_reg / len(loader)}. Entr: {running_entr / len(loader)}')
+            running_entr2 += entr2.detach().item() * - 2
+            running_entr1 += entr1.detach().item() * 5
+
+        logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. l2: {running_entr1 / len(loader)}. entr2: {running_entr2 / len(loader)}')
         
     
     @torch.no_grad()
@@ -160,12 +162,34 @@ def train(run_dir, load_from=None):
 
 
 def visualize_predictions(run_dir, epoch=None):
+
+    model_args = {
+        'image_size': 160,
+        'patch_size': 8,
+        'num_classes': 10,
+        'hidden_dim': 96,
+        'num_layers': 4,
+        'num_heads': 8,
+        'mlp_dim': 128,
+        'dropout': 0.1,
+        'attention_dropout': 0.1,
+        # 'mlp_moes': [1,1,1,2],
+        # 'attn_moes': [1,1,1,1],
+        'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+        'num_registers': 0,
+        'threshold': 0.5,
+        'num_class_tokens': 1,
+        'add_input': True,
+        'gate_type': 'sigmoid',
+    }
+    from models.residualvit import ResidualVisionTransformer
+    model = ResidualVisionTransformer(**model_args)
     
     # load model from last epoch or specified epoch
     last_checkpoint = training_args['num_epochs'] if training_args['num_epochs'] > training_args['checkpoint_every'] else 0
     epoch_to_load = epoch if epoch is not None else last_checkpoint
     checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load:03}.pth')
-    model, optimizer, epoch = load_state(checkpoint_path, model=None, optimizer=None)    
+    model, optimizer, epoch = load_state(checkpoint_path, model=model, optimizer=None)    
     
     images_dir = join(run_dir, 'images')
 
@@ -189,7 +213,9 @@ def visualize_predictions(run_dir, epoch=None):
                             val_dataset,
                             subset, 
                             transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                            save_dir = f'{images_dir}/epoch_{epoch_to_load}')
+                            save_dir = f'{images_dir}/epoch_{epoch_to_load}',
+                            hard=True
+                            )
 
 
 def visualize_experts(run_dir, model=None, epoch=None):

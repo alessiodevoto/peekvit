@@ -191,7 +191,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
       axs[layer_idx+1,0].title.set_text(layer_name)
-      cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
+      # cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
 
     fig.tight_layout()
 

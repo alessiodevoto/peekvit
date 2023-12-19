@@ -47,7 +47,7 @@ def get_imagenette(root, train_transform=IMAGENETTE_TRAIN_TRANSFORM, test_transf
       print(f'Downloading Imagenette dataset to {downloaded_file}')
       downloaded_file.write_bytes(requests.get(IMAGENETTE_URL).content)
     else:
-      print(f'Archive found in {downloaded_file}, skipping download')
+      print(f'Archive found at {downloaded_file}, skipping download')
 
     # unzip the downloaded file
     extracted_file = pathlib.Path(root) / 'imagenette2-160'
