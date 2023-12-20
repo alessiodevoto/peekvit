@@ -168,7 +168,11 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
     img, label = images[img_idx]
     # forward pass
     _img = transform(img) if transform is not None else img
-    model(make_batch(_img).to(device))
+    out = model(make_batch(_img).to(device))
+    
+    from dataset import IMAGENETTE_CLASSES
+    print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]}')
+    print(f'Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks
     gates = get_forward_masks(model)  # <moe, gating_probs>
@@ -187,11 +191,12 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       # replace non-zero values with 1
       if hard:
-        forward_mask[forward_mask != 0] = 1
+        forward_mask = torch.round(forward_mask)
+        
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
       axs[layer_idx+1,0].title.set_text(layer_name)
-      # cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
+      cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
 
     fig.tight_layout()
 

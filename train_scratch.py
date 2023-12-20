@@ -103,7 +103,7 @@ def train(run_dir, load_from=None):
         last_checkpoint = sorted(os.listdir(load_from))[-1]
         load_from = join(load_from, last_checkpoint)
         logger.log(f'Loading model from {load_from}')
-        model, _, epoch = load_state(load_from, model=None, optimizer=None)
+        model, _, epoch, model_args, _ = load_state(load_from, model=None, optimizer=None)
         # model = add_residual_gates(model, gate_args)
         # model = reinit_class_token(model)
     else:

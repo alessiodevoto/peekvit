@@ -195,11 +195,11 @@ class VisionTransformer(nn.Module):
         # Add registers
         if self.num_registers > 0:
             batch_register_tokens = self.register_tokens.expand(n, -1, -1)
-            x = torch.cat([x, batch_register_tokens], dim=1)
+            x = torch.cat([batch_register_tokens, x], dim=1)
         
         # Expand the class token to the full batch
         batch_class_tokens = self.class_tokens.expand(n, -1, -1)
-        x = torch.cat([x, batch_class_tokens], dim=1)
+        x = torch.cat([batch_class_tokens, x], dim=1)
 
         # Pass through the encoder
         x = self.encoder(x)

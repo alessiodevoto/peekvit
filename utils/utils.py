@@ -164,7 +164,7 @@ def load_state(path, model=None, optimizer=None):
         optimizer (torch.optim.Optimizer, optional): The optimizer to load the state into. If None, the optimizer state will not be loaded.
 
     Returns:
-        tuple: A tuple containing the loaded model, optimizer, and the epoch number.
+        tuple: A tuple containing the loaded model, optimizer, the epoch number, the model args and the noise args.
     """
     state = torch.load(path)
     if model is None:
@@ -176,60 +176,27 @@ def load_state(path, model=None, optimizer=None):
     if optimizer is not None:
         optimizer.load_state_dict(state['optimizer'])
         
-    return model, optimizer, state['epoch']
+    return model, optimizer, state['epoch'], state['model_args'], state['noise_args']
 
 
 
 ######################################################## Model editing ##################################################################
 
 
-
-'''def from_vitblock_to_residualvitblock(vitblock, residualvitblock_args):
-    """
-    Converts a ViT block to a ResidualViT block.
-
-    Args:
-        vitblock: The ViT block to be converted.
-        residualvitblock_args: Additional arguments for initializing the ResidualViT block.
-
-    Returns:
-        The converted ResidualViT block.
-    """
-    # transform a vit model to a residualvit model
-    from models.residualvit import ResidualViTBlock
-
-    # initialize residual block with same parameters as vit block
-    residual_block = ResidualViTBlock(
-        num_heads=vitblock.num_heads,
-        hidden_dim=vitblock.hidden_dim,
-        mlp_dim=vitblock.mlp_dim,
-        dropout=vitblock.dropout.p,
-        attention_dropout=vitblock.self_attention.self_attention.dropout,
-        **residualvitblock_args
-    )
-
-    # copy weights from vit block to residualvit block
-    residual_block.ln_1 = vitblock.ln_1
-    residual_block.self_attention = vitblock.self_attention
-    residual_block.dropout = vitblock.dropout
-    residual_block.ln_2 = vitblock.ln_2
-    residual_block.mlp = vitblock.mlp
-
-    return residual_block'''
-
-
 def add_residual_gates(residualvit_model, residual_gates_args):
     from models.residualvit import ResidualGate, ResidualViTBlock
-    skip = residual_gates_args['skip']
+    skip = residual_gates_args['residual_layers']
     gate_type = residual_gates_args['gate_type']
     add_input = residual_gates_args['add_input']
-    temp = residual_gates_args['temp']
+    temp = residual_gates_args['gate_temp']
+    i = 0
     for module_name, module in residualvit_model.named_modules():
-        if isinstance(module, ResidualViTBlock):
+        if isinstance(module, ResidualViTBlock) and skip[i] in {'attention+mlp', 'attention', 'mlp'}:
             print(f'Adding residual gate to {module_name}')
-            module.skip = skip  
+            module.skip = skip[i]  
             module.add_input = add_input
             module.residual_gate = ResidualGate(module.hidden_dim, temp=temp, gate_type=gate_type)
+            i += 1
     return residualvit_model
 
 
@@ -237,19 +204,6 @@ def freeze_module(module):
     # freeze all parameters of the module
     for param in module.parameters():
         param.requires_grad = False
-
-
-"""def train_only_gates(residualvit_model):
-    # freeze all parameters except the gates
-    from models.residualvit import ResidualGate
-    for module_name, module in residualvit_model.named_modules():
-        if isinstance(module, ResidualGate):
-            for param in module.parameters():
-                param.requires_grad = True
-        else:
-            print(f'Freezing {module_name}')
-            freeze_module(module)
-    return residualvit_model"""
 
 def train_only_gates_and_cls_token(residualvit_model):
     # freeze all parameters except the gates
@@ -265,9 +219,9 @@ def reinit_class_tokens(model):
     # reinitialize the class token
     for param_name, param in model.named_parameters():
         if 'class' in param_name:
-            print(f'Reinitializing {param_name}')
+            print(f'Reinitializing {param_name}...', end=' ')
             torch.nn.init.normal_(param, mean=0.0, std=0.02)
-            print('Reinitialized')
+            print('Reinitialized!')
     return model
 
 

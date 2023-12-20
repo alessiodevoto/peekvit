@@ -22,6 +22,7 @@ IMAGENETTE_TRAIN_TRANSFORM =  T.Compose([
                               T.ToTensor(),
                               T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
+IMAGENETTE_CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church', 'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
 def get_imagenette(root, train_transform=IMAGENETTE_TRAIN_TRANSFORM, test_transform=IMAGENETTE_TEST_TRANSFORM, target_transform=None):
     """

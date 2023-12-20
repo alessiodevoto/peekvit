@@ -35,7 +35,7 @@ class ResidualGate(nn.Module):
         if self.gate_type == 'gumbel':
             mask = self.gate(mask_log)
         elif self.gate_type == 'sigmoid':
-            mask = F.relu(torch.sigmoid(mask_log) - 0.5)
+            mask = F.relu(torch.sigmoid(mask_log + 10) - 0.5) #todo +10
         return mask
 
 
@@ -83,8 +83,6 @@ class ResidualViTBlock(ResidualModule):
         self.ln_2 = nn.LayerNorm(hidden_dim, eps=1e-06)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
-
-        
 
     def forward_skip_attention(self, input: torch.Tensor):
         # we should mask only non special tokens
@@ -140,9 +138,19 @@ class ResidualViTBlock(ResidualModule):
         special_tokens = input[:, :self.num_special_tokens, :]
         img_tokens = input[:, self.num_special_tokens:, :]
 
+
         # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens)
+        self.mask = self.residual_gate(img_tokens) 
         masked_tokens = self.mask * img_tokens
+        unmasked_tokens = img_tokens * (1-self.mask)
+
+        """print(self.mask.shape, img_tokens.shape)
+        print('img_tokens')
+        print(img_tokens)
+        print('mask')
+        print(self.mask)
+        print('masked_tokens')
+        print(masked_tokens)"""
 
         # concatenate special tokens and masked input
         masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
@@ -151,7 +159,9 @@ class ResidualViTBlock(ResidualModule):
         y = self.plain_forward(masked_input)
 
         if self.add_input:
-            y = y + input
+            # only img_tokens should be added to the output
+            y = y + torch.cat([torch.zeros_like(special_tokens), unmasked_tokens], dim=1)
+
         return y
 
     def plain_forward(self, input: torch.Tensor):
@@ -197,6 +207,7 @@ class ResidualViTEncoder(nn.Module):
         num_class_tokens: int = 1,
         num_registers: int = 0,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
+        gate_temp: float = 1.0,
 
     ):
         super().__init__()
@@ -221,6 +232,7 @@ class ResidualViTEncoder(nn.Module):
                             num_class_tokens=num_class_tokens,
                             num_registers=num_registers,
                             gate_type=gate_type,
+                            temp=gate_temp
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -251,10 +263,10 @@ class ResidualVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         residual_layers: Optional[List] = None,
-        threshold: Union[float, str] = 'auto',
         add_input: bool = True,
         num_class_tokens: int = 1,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
+        gate_temp: float = 1.0,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -268,7 +280,6 @@ class ResidualVisionTransformer(nn.Module):
         self.representation_size = representation_size
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
-        self.threshold = threshold
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [None] * num_layers
@@ -298,7 +309,8 @@ class ResidualVisionTransformer(nn.Module):
             attention_dropout,
             residual_layers=self.residual_layers,
             add_input=add_input,
-            gate_type=gate_type
+            gate_type=gate_type, 
+            gate_temp=gate_temp,
             )
 
 
@@ -344,17 +356,19 @@ class ResidualVisionTransformer(nn.Module):
         # Add registers
         if self.num_registers > 0:
             batch_register_tokens = self.register_tokens.expand(n, -1, -1)
-            x = torch.cat([x, batch_register_tokens], dim=1)
+            x = torch.cat([batch_register_tokens, x], dim=1)
         
         # Expand the class token to the full batch
         batch_class_tokens = self.class_tokens.expand(n, -1, -1)
-        x = torch.cat([x, batch_class_tokens], dim=1)
+        x = torch.cat([batch_class_tokens, x], dim=1)
 
         # Pass through the encoder
         x = self.encoder(x)
 
         # Get all class tokens and average them
+        
         x = x[:, 0:self.num_class_tokens]
+        #print(x.shape)
         x = reduce(x, 'n c e -> n e', reduction='sum')
 
         # Classification head
