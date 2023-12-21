@@ -255,6 +255,18 @@ class L1AndIntraEntropyLoss(ResidualModelLoss):
         return l1_and_intraentropy(model, budget or self.budget)
 
 
+class AlwaysZeroLoss(ResidualModelLoss):
+    """
+    A loss function that always returns zero.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, model, **kwargs):
+        return torch.tensor(0.0), torch.tensor(0.0)
+
+
 LOSSES_MAP = {
     'sparsity_per_block': SparsityLoss,
     'entropy': EntropyLoss,
@@ -276,7 +288,7 @@ def get_loss(loss_type, loss_args):
         callable: The loss function.
     """
     if loss_type is None:
-        return None
+        return AlwaysZeroLoss()
     if loss_type not in LOSSES_MAP:
         raise ValueError(f'Loss type must be one of {LOSSES_MAP.keys()}')
 

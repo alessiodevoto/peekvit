@@ -12,8 +12,9 @@ class SimpleLogger:
             os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
         self.log_file = open(log_file_path, 'w')
     
-    def log(self, *args, **kwargs):
-        pprint(*args, **kwargs)
+    def log(self,  *args, **kwargs):
+        
+        print(*args, **kwargs)
         pprint(*args, **kwargs, stream=self.log_file)
         self.log_file.flush()
     

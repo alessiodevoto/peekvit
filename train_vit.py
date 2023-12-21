@@ -15,6 +15,8 @@ from peekvit.dataset import get_imagenette
 from models.models import build_model
 from peekvit.losses import get_loss
 from utils.topology import add_residual_gates, reinit_class_tokens
+from torch.utils.tensorboard import SummaryWriter
+
 
 
 torch.manual_seed(0)
@@ -29,16 +31,16 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-model_class = 'ResidualVisionTransformer'
+model_class = 'VisionTransformer'
 
 model_args = {
         'image_size': 160,
         'patch_size': 8,
         'num_classes': 10,
-        'hidden_dim': 96,
+        'hidden_dim': 128,
         'num_layers': 4,
         'num_heads': 8,
-        'mlp_dim': 128,
+        'mlp_dim': 378,
         'dropout': 0.1,
         'attention_dropout': 0.1,
         'num_registers': 0,
@@ -47,31 +49,21 @@ model_args = {
 
 
 
-gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    'gate_temp': 1,
-    'add_input': True,
-    'gate_type': 'sigmoid',
-}
-
-
-
 noise_args = None
-# gate_args = None
+gate_args = None
 
 
 training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-3,
-    'num_epochs': 200,
-    'eval_every': 5,
-    'checkpoint_every': 10,
-    'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1000, 0],
-    'additional_loss_args': {'budget':0.25},
-    'reinit_class_tokens': True,
-    'temp': 0.1
+    'num_epochs': 300,
+    'eval_every': 10,
+    'checkpoint_every': 20,
+    'additional_loss': None ,
+    'additional_loss_weights': [0,0],
+    'additional_loss_args': None,
+    'reinit_class_tokens': False,
 }
 
 
@@ -82,9 +74,8 @@ def train(run_dir, load_from=None):
     checkpoints_dir = join(run_dir, 'checkpoints')
     logger = SimpleLogger(join(run_dir, 'logs.txt'))
     logger.log(f'Experiment name: {run_dir}')
-    logger.log(noise_args)
-    logger.log(gate_args)
-    logger.log(training_args)
+    logger.log({'training_args': training_args, 'noise_args': noise_args, 'gate_args': gate_args})
+    writer = SummaryWriter(run_dir)
 
 
     # dataset and dataloader
@@ -99,7 +90,8 @@ def train(run_dir, load_from=None):
         last_checkpoint = sorted(os.listdir(load_from))[-1]
         load_from = join(load_from, last_checkpoint)
         logger.log(f'Loading model from {load_from}')
-        model, optimizer, epoch, model_args, _ = load_state(load_from, model=None, optimizer=None)
+        model, optimizer, epoch, loaded_model_args, _ = load_state(load_from, model=None, optimizer=None)
+        model_args.update(loaded_model_args)
     else:
         model = build_model(model_class, model_args, noise_args)
     
@@ -122,7 +114,6 @@ def train(run_dir, load_from=None):
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_gates_and_cls_token(model)
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
@@ -141,7 +132,10 @@ def train(run_dir, load_from=None):
             running_inter += inter_reg.detach().item() * inter_weight
 
         logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
-        
+        writer.add_scalar('Loss/train', running_loss / len(loader), epoch)
+        writer.add_scalar('Loss/main', running_main_loss / len(loader), epoch)
+        writer.add_scalar('Loss/intra', running_intra / len(loader), epoch)
+        writer.add_scalar('Loss/inter', running_inter / len(loader), epoch)
     
     @torch.no_grad()
     def validate_epoch(model, loader):
@@ -163,6 +157,7 @@ def train(run_dir, load_from=None):
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
             acc = validate_epoch(model, val_loader)
             logger.log(f'Epoch {epoch:03} accuracy: {acc}')
+            writer.add_scalar('Accuracy/val', acc, epoch)
 
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, model_args, noise_args, optimizer, epoch)

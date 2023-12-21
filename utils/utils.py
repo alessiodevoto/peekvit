@@ -225,3 +225,24 @@ def reinit_class_tokens(model):
     return model
 
 
+######################################################## Mix ##################################################################
+
+# map imagenette to imagenet classes via a transform
+class ImagenetToImagenetteLabel(object):
+    def __init__(self):
+        super().__init__()
+        self.mapping = {
+            0: 0,       # tench
+            1: 217,     # english springer
+            2: 482,     # cassette player
+            3: 491,     # chainsaw
+            4: 497,     # church
+            5: 566,     # french horn
+            6: 569,     # garbage
+            7: 571,     # gas
+            8: 574,     # golf ball
+            9: 701,     # parachute
+        }
+
+    def __call__(self, label):
+        return self.mapping[label]

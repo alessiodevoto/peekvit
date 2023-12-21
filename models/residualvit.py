@@ -18,11 +18,12 @@ class ResidualModule(ABC, nn.Module):
 
 
 class ResidualGate(nn.Module):
-    def __init__(self, hidden_dim, temp=1.0, gate_type='gumbel'):
+    def __init__(self, hidden_dim, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 0.0):
         super().__init__()
         self.projection = nn.Linear(hidden_dim, 1)
         self.temp = temp
         self.gate_type = gate_type
+        self.sigmoid_bias = sigmoid_bias
         if gate_type == 'gumbel':
             self.gate = GumbelSigmoid(hard=True)
         elif gate_type == 'sigmoid':
@@ -35,7 +36,7 @@ class ResidualGate(nn.Module):
         if self.gate_type == 'gumbel':
             mask = self.gate(mask_log)
         elif self.gate_type == 'sigmoid':
-            mask = F.relu(torch.sigmoid(mask_log + 10) - 0.5) #todo +10
+            mask = F.relu(torch.sigmoid(mask_log + self.sigmoid_bias) - 0.5) 
         return mask
 
 
