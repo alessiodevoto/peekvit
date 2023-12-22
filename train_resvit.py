@@ -67,8 +67,8 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1, 0],
-    'additional_loss_args': {'budget':0.65},
+    'additional_loss_weights': [1e-2, 0],
+    'additional_loss_args': {'budget':0.65, 'strict':False},
     'reinit_class_tokens': True,
 }
 
@@ -188,7 +188,7 @@ def visualize_predictions(run_dir, epoch=None):
     # load dataset
     # you can decide here how many images you want to visualize
     _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, test_transform=visualization_transform)
-    subset = torch.arange(0, 10, 1) 
+    subset = torch.arange(0, 4000, 400) 
 
 
     # visualize predictions

@@ -1,10 +1,11 @@
 import torch
 from utils.utils import get_model_device, get_forward_masks
 from einops import reduce
-from torch.nn.functional import cross_entropy
+from torch.nn.functional import cross_entropy, relu
 from torch.special import entr
 from abc import ABC, abstractmethod
 from typing import Literal
+
 
 
 class ResidualModelLoss(torch.nn.Module, ABC):
@@ -102,7 +103,7 @@ def solo_l1(model, budget: float = 0.25, **kwargs):
     return torch.mean(sparsity_loss),  torch.mean(additional_l1)
 
 
-def solo_mse(model, budget: float = 0.65, **kwargs):
+def solo_mse(model, budget: float = 0.65, strict: bool = False, **kwargs):
     
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
     masks = get_forward_masks(model)
@@ -111,7 +112,7 @@ def solo_mse(model, budget: float = 0.65, **kwargs):
     sparsity_loss = []
     for _, mask in masks.items():
         sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
-        sparsity_loss.append(torch.sum((sparsity - budget) ** 2))
+        sparsity_loss.append(torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2))
     
     sparsity_loss = torch.stack(sparsity_loss)
 
@@ -214,9 +215,10 @@ class MSELoss(ResidualModelLoss):
     Computes the MSE loss of the model.
     """
 
-    def __init__(self, budget: float) -> None:
+    def __init__(self, budget: float, strict: bool = False) -> None:
         super().__init__()
         self.budget = budget
+        self.strict = strict
 
     def forward(self, model, budget = None, **kwargs):
         """
@@ -229,7 +231,7 @@ class MSELoss(ResidualModelLoss):
         Returns:
             torch.Tensor: The MSE loss.
         """
-        return solo_mse(model, budget or self.budget)
+        return solo_mse(model, budget or self.budget, self.strict)
 
 
 class L1AndIntraEntropyLoss(ResidualModelLoss):

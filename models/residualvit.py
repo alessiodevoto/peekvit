@@ -18,7 +18,7 @@ class ResidualModule(ABC, nn.Module):
 
 
 class ResidualGate(nn.Module):
-    def __init__(self, hidden_dim, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 0.0):
+    def __init__(self, hidden_dim, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10):
         super().__init__()
         self.projection = nn.Linear(hidden_dim, 1)
         self.temp = temp
@@ -38,7 +38,10 @@ class ResidualGate(nn.Module):
             mask = self.gate(mask_log)
         elif self.gate_type == 'sigmoid':
             # print(torch.sigmoid(mask_log + self.sigmoid_bias))
-            mask = F.relu(torch.sigmoid(mask_log + self.sigmoid_bias) - 0.2) 
+            # mask = F.relu(torch.sigmoid(mask_log * 0.5 + self.sigmoid_bias) - 0.5) 
+            mask = torch.sigmoid(mask_log * 0.5 + self.sigmoid_bias) # squeeze sigmoid
+            # mask = (torch.sigmoid(mask_log + self.sigmoid_bias)  - 0.5)
+        
         return mask
 
 
@@ -144,7 +147,7 @@ class ResidualViTBlock(ResidualModule):
 
         # residual gating, here we learn a scalar for each token
         self.mask = self.residual_gate(img_tokens) 
-        masked_tokens = self.mask * img_tokens
+        masked_tokens = self.mask  * img_tokens 
         unmasked_tokens = img_tokens * (1-self.mask)
 
         """print(self.mask.shape, img_tokens.shape)
@@ -364,6 +367,7 @@ class ResidualVisionTransformer(nn.Module):
         # Expand the class token to the full batch
         batch_class_tokens = self.class_tokens.expand(n, -1, -1)
         x = torch.cat([batch_class_tokens, x], dim=1)
+
 
         # Pass through the encoder
         x = self.encoder(x)
