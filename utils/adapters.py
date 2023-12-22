@@ -108,6 +108,7 @@ def from_vit_to_residual_vit(vit_checkpoint, residual_vit_args:dict = None):
 
     Returns:
         ResidualViT: The converted ResidualViT model.
+        Args: The Resvit model arguments.
     """
     
     # load weights from vit checkpoint
@@ -123,8 +124,10 @@ def from_vit_to_residual_vit(vit_checkpoint, residual_vit_args:dict = None):
     res = residual_vit.load_state_dict(vit_weights, strict=False)
 
     print('Some parameters are not present in the checkpoint and will be randomly initialized: ', res[0])
+
+    model_args.update(residual_vit_args)
         
-    return residual_vit
+    return residual_vit, model_args
 
 
 

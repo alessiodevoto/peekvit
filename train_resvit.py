@@ -31,7 +31,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model_class = 'ResidualVisionTransformer'
 
-model_args = {
+"""model_args = {
         'image_size': 160,
         'patch_size': 8,
         'num_classes': 10,
@@ -43,20 +43,19 @@ model_args = {
         'attention_dropout': 0.1,
         'num_registers': 0,
         'num_class_tokens': 1,
-    }
-
+    }"""
 
 
 gate_args = {
     'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
     'gate_temp': 1,
-    'add_input': True,
+    'add_input': False,
     'gate_type': 'sigmoid',
 }
 
 
 
-noise_args = None
+# noise_args = None
 # gate_args = None
 
 
@@ -64,14 +63,13 @@ training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-3,
-    'num_epochs': 200,
+    'num_epochs': 100,
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1000, 0],
-    'additional_loss_args': {'budget':0.25},
+    'additional_loss_weights': [1, 0],
+    'additional_loss_args': {'budget':0.65},
     'reinit_class_tokens': True,
-    'temp': 0.1
 }
 
 
@@ -82,7 +80,7 @@ def train(run_dir, load_from=None):
     checkpoints_dir = join(run_dir, 'checkpoints')
     logger = SimpleLogger(join(run_dir, 'logs.txt'))
     logger.log(f'Experiment name: {run_dir}')
-    logger.log(noise_args)
+    # logger.log(noise_args)
     logger.log(gate_args)
     logger.log(training_args)
 
@@ -101,17 +99,13 @@ def train(run_dir, load_from=None):
         logger.log(f'Loading model from {load_from}')
         checkpoint_model_class = torch.load(load_from)['model_class']
         if checkpoint_model_class == 'VisionTransformer':
-            model = from_vit_to_residual_vit(load_from)
+            model, model_args = from_vit_to_residual_vit(load_from, gate_args)
         elif checkpoint_model_class == 'ResidualVisionTransformer':
-            model, _, _, model_args, noise_args = load_state(load_from, model=None, optimizer=None)
+            model, _, _, model_args, _ = load_state(load_from, model=None, optimizer=None)
     else:
-        model = build_model(model_class, model_args, noise_args)
+        model = build_model(model_class, model_args, noise_args=None)
     
-    # edit model topology
-    if gate_args:
-        model = add_residual_gates(model, gate_args)
-        model_args.update(gate_args)
-
+ 
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
     
@@ -126,7 +120,7 @@ def train(run_dir, load_from=None):
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_gates_and_cls_token(model)
+        model = train_only_gates_and_cls_token(model, verbose=False)
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
@@ -166,10 +160,11 @@ def train(run_dir, load_from=None):
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
             acc = validate_epoch(model, val_loader)
+            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 10, 1), epoch, T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), f'{run_dir}/images/epoch_{epoch}', hard=True)
             logger.log(f'Epoch {epoch:03} accuracy: {acc}')
 
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
-            save_state(checkpoints_dir, model, model_args, noise_args, optimizer, epoch)
+            save_state(checkpoints_dir, model, model_args, None, optimizer, epoch)
 
 
 def visualize_predictions(run_dir, epoch=None):
@@ -204,8 +199,20 @@ def visualize_predictions(run_dir, epoch=None):
                             subset, 
                             transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                             save_dir = f'{images_dir}/epoch_{epoch_to_load}',
-                            hard=T
+                            hard=True
                             )
+
+
+def visualize_predictions_in_training(model, dataset, subset, epoch, transform, save_dir, hard=False):
+    from visualize import img_mask_distribution
+    img_mask_distribution(model, 
+                        dataset,
+                        subset, 
+                        transform = transform,
+                        save_dir = save_dir,
+                        hard=hard
+                        )
+
 
 
 def visualize_experts(run_dir, model=None, epoch=None):

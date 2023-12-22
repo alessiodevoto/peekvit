@@ -171,8 +171,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
     out = model(make_batch(_img).to(device))
     
     from dataset import IMAGENETTE_CLASSES
-    print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]}')
-    print(f'Ground truth class: {IMAGENETTE_CLASSES[label]}')
+    #print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks
     gates = get_forward_masks(model)  # <moe, gating_probs>
@@ -192,11 +191,16 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
       # replace non-zero values with 1
       if hard:
         forward_mask = torch.round(forward_mask)
+        # print(torch.any(forward_mask >= 0.5))
         
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
       axs[layer_idx+1,0].title.set_text(layer_name)
       cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
+
+      # add annotation for predicted vs ground truth class
+      if layer_idx == 0:
+        axs[layer_idx+1,0].annotate(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}', xy=(0, 0), xytext=(0, 0), textcoords='axes fraction', fontsize=10, ha='left', va='top', color='black')
 
     fig.tight_layout()
 

@@ -33,10 +33,12 @@ class ResidualGate(nn.Module):
 
     def forward(self, x):
         mask_log = self.projection(x) / self.temp
+        # print(mask_log)
         if self.gate_type == 'gumbel':
             mask = self.gate(mask_log)
         elif self.gate_type == 'sigmoid':
-            mask = F.relu(torch.sigmoid(mask_log + self.sigmoid_bias) - 0.5) 
+            # print(torch.sigmoid(mask_log + self.sigmoid_bias))
+            mask = F.relu(torch.sigmoid(mask_log + self.sigmoid_bias) - 0.2) 
         return mask
 
 

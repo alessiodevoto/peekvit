@@ -170,7 +170,6 @@ def load_state(path, model=None, optimizer=None):
     if model is None:
         # create model based on saved state
         model = build_model(state['model_class'], state['model_args'], state['noise_args'])
-        #model = state['model_class'](**state['model_args'])
     model.load_state_dict(state['state_dict'])
 
     if optimizer is not None:
@@ -205,14 +204,24 @@ def freeze_module(module):
     for param in module.parameters():
         param.requires_grad = False
 
-def train_only_gates_and_cls_token(residualvit_model):
+
+def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
     # freeze all parameters except the gates
+    print('Freezing all parameters except the gates and the class token')
+    
+    frozen_params, trainable_params = [], []
     for param_name, param in residualvit_model.named_parameters():
-        if 'gate' or 'class' in param_name:
+        if any([x in param_name for x in ['gate', 'class', 'head']]):
             param.requires_grad = True
+            trainable_params.append(param_name)
         else:
-            # print(f'Freezing {param_name}')
             param.requires_grad = False
+            frozen_params.append(param_name)
+    
+    if verbose:
+        print('Trainable parameters:', trainable_params)
+        print('Frozen parameters:', frozen_params)
+
     return residualvit_model
 
 def reinit_class_tokens(model):
