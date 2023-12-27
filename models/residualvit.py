@@ -75,11 +75,13 @@ class ResidualViTBlock(ResidualModule):
         skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_threshold: float = 0.5,
+        budget_token: bool = False,
     ):
         super().__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
+        self.budget_token = budget_token
         self.num_special_tokens = num_class_tokens + num_registers
 
         # residual settings
@@ -154,13 +156,19 @@ class ResidualViTBlock(ResidualModule):
         special_tokens = input[:, :self.num_special_tokens, :]
         img_tokens = input[:, self.num_special_tokens:, :]
 
+        """if self.budget_token:
+            # budget token is the last token
+            budget_token = img_tokens[:, -1:, :]
+            img_tokens = img_tokens[:, :-1, :]"""
+
+
 
         # residual gating, here we learn a scalar for each token
         self.mask = self.residual_gate(img_tokens) 
         masked_tokens = self.mask * img_tokens 
         unmasked_tokens = img_tokens * (1-self.mask)
 
-        # concatenate special tokens and masked input
+        # concatenate special tokens, masked input and budget token
         masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
 
         # plain forward
@@ -217,6 +225,7 @@ class ResidualViTEncoder(nn.Module):
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
         gate_threshold: float = 0.5,
+        budget_token: bool = False,
 
     ):
         super().__init__()
@@ -225,6 +234,7 @@ class ResidualViTEncoder(nn.Module):
         self.num_class_tokens  = num_class_tokens
         self.num_registers = num_registers
         self.num_special_tokens = num_class_tokens + num_registers
+        self.budget_token = budget_token
 
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
@@ -243,6 +253,7 @@ class ResidualViTEncoder(nn.Module):
                             gate_type=gate_type,
                             temp=gate_temp,
                             gate_threshold=gate_threshold,
+                            budget_token=budget_token
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -250,7 +261,14 @@ class ResidualViTEncoder(nn.Module):
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+        if self.budget_token:
+            # budget token is the last token
+            budget_token = input[:, -1:, :]
+            input = input[:, :-1, :]
+
         input = input + self.pos_embedding
+        if self.budget_token:
+            input = torch.cat([input, budget_token], dim=1)
         input = self.dropout(input)
         input = self.layers(input)
         return self.ln(input)
@@ -278,6 +296,7 @@ class ResidualVisionTransformer(nn.Module):
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
         gate_threshold: float = 0.5,
+        add_budget_token: bool = False,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -291,6 +310,7 @@ class ResidualVisionTransformer(nn.Module):
         self.representation_size = representation_size
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
+        self.add_budget_token = add_budget_token
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [None] * num_layers
@@ -310,6 +330,7 @@ class ResidualVisionTransformer(nn.Module):
         
         self.num_special_tokens = num_class_tokens + num_registers
 
+
         self.encoder = ResidualViTEncoder(
             seq_length,
             num_layers,
@@ -323,7 +344,11 @@ class ResidualVisionTransformer(nn.Module):
             gate_type=gate_type, 
             gate_temp=gate_temp,
             gate_threshold=gate_threshold,
+            budget_token=add_budget_token,
             )
+    
+        if self.add_budget_token:
+            seq_length += 1
 
 
         self.seq_length = seq_length
@@ -374,10 +399,11 @@ class ResidualVisionTransformer(nn.Module):
         batch_class_tokens = self.class_tokens.expand(n, -1, -1)
         x = torch.cat([batch_class_tokens, x], dim=1)
 
-        """if self.add_budget_token:
-            # sample a budget between 0 and 1 for each batch and transform it into a token
-            budget_token = torch.rand(n, 1, self.hidden_dim, device=x.device)
-            x = torch.cat([x, budget_token], dim=1)"""
+        if self.add_budget_token:
+            # sample a value between 0 and 1 and create a token with that value
+            # for now the token is the same for all the batch
+            budget_token = torch.rand((1, 1, 1), device=x.device).expand(n, 1, self.hidden_dim)
+            x = torch.cat([x, budget_token], dim=1)
 
 
         # Pass through the encoder

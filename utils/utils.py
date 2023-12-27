@@ -108,7 +108,9 @@ def get_learned_thresholds(model):
     thresholds = {}
     for module_name, module in model.named_modules():
         if isinstance(module, ResidualModule) and module.skip not in {None, 'none'}:
-            thresholds[module_name] = module.residual_gate.threshold.item() # scalar
+            t = module.residual_gate.threshold # scalar
+            t = t if isinstance(t, float) else t.item()
+            thresholds[module_name] = t
 
     return thresholds
 

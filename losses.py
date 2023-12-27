@@ -152,7 +152,7 @@ class SparsityLoss(ResidualModelLoss):
         super().__init__()
         self.budget = budget
 
-    def forward(self, model, **kwargs):
+    def forward(self, model, budget=None, **kwargs):
         """
         Computes the sparsity loss of the model.
 
@@ -163,7 +163,7 @@ class SparsityLoss(ResidualModelLoss):
         Returns:
             torch.Tensor: The sparsity loss.
         """
-        return sparsity_loss_per_block(model, budget=self.budget, **kwargs)
+        return sparsity_loss_per_block(model, budget= budget or self.budget, **kwargs)
 
 
 class EntropyLoss(ResidualModelLoss):
@@ -208,6 +208,7 @@ class L1Loss(ResidualModelLoss):
         Returns:
             torch.Tensor: The L1 loss.
         """
+        # if batch is not None and a budget was not provided, compute the budget from the batch
         return solo_l1(model, budget or self.budget)
 
 class MSELoss(ResidualModelLoss):

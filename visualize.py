@@ -158,6 +158,7 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
   device = get_model_device(model)
   num_registers = getattr(model, 'num_registers', 0) 
   num_class_tokens = getattr(model, 'num_class_tokens', 1)
+  budget_token = getattr(model, 'add_budget_token', False)
   
   image_size = max(images[0][0].shape[-1], images[0][0].shape[0])  # it could be channel first or channel last
   patch_size = model.patch_size
@@ -187,6 +188,9 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
 
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
+      
+      if budget_token:
+         forward_mask = forward_mask[:, :-1, :]
 
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       # replace non-zero values with 1

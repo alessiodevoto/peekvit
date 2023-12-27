@@ -51,7 +51,8 @@ gate_args = {
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
-    'gate_threshold': 'learnable',
+    'gate_threshold': 0.5,
+    'add_budget_token': True
 }
 
 
@@ -68,8 +69,8 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1e-1, 0],
-    'additional_loss_args': {'budget':0.65, 'strict':False},
+    'additional_loss_weights': [0.5, 0],
+    'additional_loss_args': {'budget': 'budget_token', 'strict':False},
     'reinit_class_tokens': True,
 }
 
@@ -119,6 +120,14 @@ def train(run_dir, load_from=None):
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
 
+    # budget for regularization
+    # if budget is a float, it is used as a constant, else we use the budget token which is the last token in the sequence
+    training_budget = training_args['additional_loss_args']['budget']
+    if training_budget == 'budget_token':
+        get_training_budget = lambda batch : batch[:,-1].mean().item()
+    else:
+        get_training_budget = lambda batch : training_budget
+
     def train_epoch(model, loader, optimizer):
         model.train()
         model = train_only_gates_and_cls_token(model, verbose=False)
@@ -128,7 +137,7 @@ def train(run_dir, load_from=None):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels) 
-            intra_reg, inter_reg  = regularization(model)
+            intra_reg, inter_reg = regularization(model, budget=get_training_budget(batch))
             loss = main_loss + intra_reg * intra_weight + inter_reg * inter_weight
             loss.backward()
             optimizer.step()
@@ -163,7 +172,7 @@ def train(run_dir, load_from=None):
             acc = validate_epoch(model, val_loader)
             logger.log(f'Epoch {epoch:03} accuracy: {acc}')
             from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
-            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 10, 1), epoch, None,IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}', hard=False)
+            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None,IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}', hard=False)
             
 
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
