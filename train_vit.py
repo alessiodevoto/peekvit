@@ -193,7 +193,7 @@ def visualize_predictions(run_dir, epoch=None):
     img_mask_distribution(model, 
                             val_dataset,
                             subset, 
-                            transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                            model_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                             save_dir = f'{images_dir}/epoch_{epoch_to_load}',
                             hard=T
                             )

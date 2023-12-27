@@ -51,6 +51,7 @@ gate_args = {
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
+    'gate_threshold': 'learnable',
 }
 
 
@@ -67,7 +68,7 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1e-2, 0],
+    'additional_loss_weights': [1e-1, 0],
     'additional_loss_args': {'budget':0.65, 'strict':False},
     'reinit_class_tokens': True,
 }
@@ -160,8 +161,10 @@ def train(run_dir, load_from=None):
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
             acc = validate_epoch(model, val_loader)
-            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 10, 1), epoch, T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), f'{run_dir}/images/epoch_{epoch}', hard=True)
             logger.log(f'Epoch {epoch:03} accuracy: {acc}')
+            from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 10, 1), epoch, None,IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}', hard=False)
+            
 
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, model_args, None, optimizer, epoch)
@@ -197,18 +200,19 @@ def visualize_predictions(run_dir, epoch=None):
     img_mask_distribution(model, 
                             val_dataset,
                             subset, 
-                            transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                            model_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                             save_dir = f'{images_dir}/epoch_{epoch_to_load}',
                             hard=True
                             )
 
 
-def visualize_predictions_in_training(model, dataset, subset, epoch, transform, save_dir, hard=False):
+def visualize_predictions_in_training(model, dataset, subset, epoch, transform, visualizzation_transform, save_dir, hard=False):
     from visualize import img_mask_distribution
     img_mask_distribution(model, 
                         dataset,
                         subset, 
-                        transform = transform,
+                        model_transform = transform,
+                        visualization_transform=visualizzation_transform,
                         save_dir = save_dir,
                         hard=hard
                         )

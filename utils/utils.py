@@ -102,6 +102,17 @@ def get_forward_masks(model):
     return masks
 
 
+def get_learned_thresholds(model):
+
+    from models.residualvit import ResidualModule
+    thresholds = {}
+    for module_name, module in model.named_modules():
+        if isinstance(module, ResidualModule) and module.skip not in {None, 'none'}:
+            thresholds[module_name] = module.residual_gate.threshold.item() # scalar
+
+    return thresholds
+
+
 ######################################################## Noise ##################################################################
 
 
@@ -211,7 +222,7 @@ def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
     
     frozen_params, trainable_params = [], []
     for param_name, param in residualvit_model.named_parameters():
-        if any([x in param_name for x in ['gate', 'class', 'head']]):
+        if any([x in param_name for x in ['gate', 'class', 'head', 'threshold']]):
             param.requires_grad = True
             trainable_params.append(param_name)
         else:
@@ -255,3 +266,4 @@ class ImagenetToImagenetteLabel(object):
 
     def __call__(self, label):
         return self.mapping[label]
+

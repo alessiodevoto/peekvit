@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from os.path import join
 import numpy as np
 
-from utils.utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks
+from utils.utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
 ######################################################## Utils ##################################################################
 
@@ -142,7 +142,7 @@ def display_expert_embeddings(model, save_dir):
 
 
 @torch.no_grad()
-def img_mask_distribution(model, images: List, subset, transform: Optional[None] = None, save_dir: str = None, hard: bool = False):
+def img_mask_distribution(model, images: List, subset, model_transform: Optional[None] = None, visualization_transform: Optional[None] = None, save_dir: str = None, hard: bool = False):
   """
   Plot the expert distribution masks for each layer of a given model.
 
@@ -158,7 +158,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
   device = get_model_device(model)
   num_registers = getattr(model, 'num_registers', 0) 
   num_class_tokens = getattr(model, 'num_class_tokens', 1)
-
+  
   image_size = max(images[0][0].shape[-1], images[0][0].shape[0])  # it could be channel first or channel last
   patch_size = model.patch_size
   patches_per_side = (image_size // patch_size)
@@ -167,21 +167,22 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
 
     img, label = images[img_idx]
     # forward pass
-    _img = transform(img) if transform is not None else img
+    _img = model_transform(img) if model_transform is not None else img
     out = model(make_batch(_img).to(device))
     
     from dataset import IMAGENETTE_CLASSES
     #print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks
-    gates = get_forward_masks(model)  # <moe, gating_probs>
+    gates = get_forward_masks(model)  # <residual, gating_probs>
+    thresolds = get_learned_thresholds(model) # <redsidual, thre>
     
     # prepare plot, we want a row for each residual layer,
     # and two columns, one for the image and one for token masks
     fig, axs = plt.subplots(len(gates.keys())+1, 1, squeeze=False, figsize=(10, 25))
 
     # plot the image
-    img = prepare_for_matplotlib(img)
+    img = prepare_for_matplotlib(visualization_transform(img) if visualization_transform is not None else img)
     axs[0,0].imshow(img)
 
     # for each layer, plot the image and the token mask
@@ -190,7 +191,7 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       # replace non-zero values with 1
       if hard:
-        forward_mask = torch.round(forward_mask)
+        forward_mask = torch.nn.functional.relu(forward_mask - thresolds[layer_name])
         # print(torch.any(forward_mask >= 0.5))
         
       forward_mask = prepare_for_matplotlib(forward_mask)
@@ -198,9 +199,9 @@ def img_mask_distribution(model, images: List, subset, transform: Optional[None]
       axs[layer_idx+1,0].title.set_text(layer_name)
       cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
 
-      # add annotation for predicted vs ground truth class
-      if layer_idx == 0:
-        axs[layer_idx+1,0].annotate(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}', xy=(0, 0), xytext=(0, 0), textcoords='axes fraction', fontsize=10, ha='left', va='top', color='black')
+      # set title to predicted and ground truth class
+      title = f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}'
+      axs[0,0].title.set_text(title)
 
     fig.tight_layout()
 

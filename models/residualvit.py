@@ -6,7 +6,7 @@ from typing import Optional, List, Union, Literal
 from abc import ABC
 from einops import reduce
 
-from .blocks import SelfAttention, MLP, GumbelSigmoid
+from .blocks import SelfAttention, MLP, GumbelSigmoid, SigmoidWithTemp
 
 """
 A Vision Transformer with Residual Gating which can be placed at any layer.
@@ -18,30 +18,39 @@ class ResidualModule(ABC, nn.Module):
 
 
 class ResidualGate(nn.Module):
-    def __init__(self, hidden_dim, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10):
+    def __init__(self, hidden_dim, threshold:Union[float, str] = 0.5, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10):
         super().__init__()
         self.projection = nn.Linear(hidden_dim, 1)
         self.temp = temp
         self.gate_type = gate_type
         self.sigmoid_bias = sigmoid_bias
+
         if gate_type == 'gumbel':
             self.gate = GumbelSigmoid(hard=True)
         elif gate_type == 'sigmoid':
-            self.gate = nn.Sigmoid()
+            self.gate = SigmoidWithTemp(temp=temp, bias=sigmoid_bias)
         else:
             raise ValueError(f'Unknown gate type {gate_type}')
+        
+        if gate_type == 'gumbel' and threshold != 0.5:
+            raise ValueError(f'Gumbel gate cannot have a threshold different from 0.5')
+        
+        # threshold is a scalar learnable parameter
+        if isinstance(threshold, float):
+            self.threshold = threshold
+        elif threshold == 'learnable':
+            self.threshold = nn.Parameter(torch.tensor(0.5))
 
     def forward(self, x):
         mask_log = self.projection(x) / self.temp
-        # print(mask_log)
-        if self.gate_type == 'gumbel':
-            mask = self.gate(mask_log)
-        elif self.gate_type == 'sigmoid':
-            # print(torch.sigmoid(mask_log + self.sigmoid_bias))
-            # mask = F.relu(torch.sigmoid(mask_log * 0.5 + self.sigmoid_bias) - 0.5) 
-            mask = torch.sigmoid(mask_log * 0.5 + self.sigmoid_bias) # squeeze sigmoid
-            # mask = (torch.sigmoid(mask_log + self.sigmoid_bias)  - 0.5)
+        mask = self.gate(mask_log)
+
+        # transform mask into 0s and 1s in a differentiable way with straight through gradient
+        # mask = mask + mask.round().detach() - mask.detach()
         
+        mask = F.relu(mask - self.threshold) 
+
+
         return mask
 
 
@@ -65,6 +74,7 @@ class ResidualViTBlock(ResidualModule):
         num_registers: int = 0,
         skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
+        gate_threshold: float = 0.5,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -78,7 +88,7 @@ class ResidualViTBlock(ResidualModule):
         if skip in {'attention', 'mlp', 'attention+mlp'}:
             self.temp = temp
             self.add_input = add_input
-            self.residual_gate = ResidualGate(hidden_dim, temp=temp, gate_type=gate_type)
+            self.residual_gate = ResidualGate(hidden_dim, threshold=gate_threshold, temp=temp, gate_type=gate_type)
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim, eps=1e-06)
@@ -147,16 +157,8 @@ class ResidualViTBlock(ResidualModule):
 
         # residual gating, here we learn a scalar for each token
         self.mask = self.residual_gate(img_tokens) 
-        masked_tokens = self.mask  * img_tokens 
+        masked_tokens = self.mask * img_tokens 
         unmasked_tokens = img_tokens * (1-self.mask)
-
-        """print(self.mask.shape, img_tokens.shape)
-        print('img_tokens')
-        print(img_tokens)
-        print('mask')
-        print(self.mask)
-        print('masked_tokens')
-        print(masked_tokens)"""
 
         # concatenate special tokens and masked input
         masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
@@ -214,6 +216,7 @@ class ResidualViTEncoder(nn.Module):
         num_registers: int = 0,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
+        gate_threshold: float = 0.5,
 
     ):
         super().__init__()
@@ -238,7 +241,8 @@ class ResidualViTEncoder(nn.Module):
                             num_class_tokens=num_class_tokens,
                             num_registers=num_registers,
                             gate_type=gate_type,
-                            temp=gate_temp
+                            temp=gate_temp,
+                            gate_threshold=gate_threshold,
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -273,6 +277,7 @@ class ResidualVisionTransformer(nn.Module):
         num_class_tokens: int = 1,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
+        gate_threshold: float = 0.5,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -317,6 +322,7 @@ class ResidualVisionTransformer(nn.Module):
             add_input=add_input,
             gate_type=gate_type, 
             gate_temp=gate_temp,
+            gate_threshold=gate_threshold,
             )
 
 
@@ -368,12 +374,16 @@ class ResidualVisionTransformer(nn.Module):
         batch_class_tokens = self.class_tokens.expand(n, -1, -1)
         x = torch.cat([batch_class_tokens, x], dim=1)
 
+        """if self.add_budget_token:
+            # sample a budget between 0 and 1 for each batch and transform it into a token
+            budget_token = torch.rand(n, 1, self.hidden_dim, device=x.device)
+            x = torch.cat([x, budget_token], dim=1)"""
+
 
         # Pass through the encoder
         x = self.encoder(x)
 
         # Get all class tokens and average them
-        
         x = x[:, 0:self.num_class_tokens]
         #print(x.shape)
         x = reduce(x, 'n c e -> n e', reduction='sum')

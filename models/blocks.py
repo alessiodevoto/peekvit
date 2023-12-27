@@ -26,15 +26,17 @@ class GumbelSoftmax(nn.Module):
 
 # A differentiable Gumbel Sigmoid module
 class GumbelSigmoid(nn.Module):
-    def __init__(self, hard):
+    def __init__(self, hard: bool = True, temp: float = 1.0, bias: float = 0.0):
       super().__init__()
       self.hard = hard
+      self.temp = temp  
+      self.bias = bias 
     
     @staticmethod
-    def gumbel_sigmoid(logits: torch.Tensor, tau: float = 1, hard: bool = False, eps: float = 1e-10):
+    def gumbel_sigmoid(logits: torch.Tensor, tau: float = 1, bias: float = 0.0, hard: bool = False, eps: float = 1e-10):
       gumbels = -torch.empty_like(logits).exponential_().log()  # ~Gumbel(0,1)
       gumbels = (logits + gumbels) / tau  # ~Gumbel(logits,tau)
-      y_soft = torch.sigmoid(gumbels)
+      y_soft = torch.sigmoid(gumbels + bias)
 
       if hard:
           # Straight through.
@@ -48,7 +50,7 @@ class GumbelSigmoid(nn.Module):
     def forward(self, x):
       # check if model is in training mode
       if self.training:
-        return self.gumbel_sigmoid(x, hard = self.hard)
+        return self.gumbel_sigmoid(x, hard = self.hard, tau = self.temp, bias = self.bias)
       else:
         # at inference, we use a hard threshold
         return torch.round(torch.sigmoid(x))
@@ -57,11 +59,16 @@ class GumbelSigmoid(nn.Module):
 
 # A differentiable Sigmoid with temperature module
 class SigmoidWithTemp(nn.Module):
-    def __init__(self, temp):
+    def __init__(self, bias: float = 0, temp: float = 1.0):
       super().__init__()
       self.temp = temp
+      self.bias = bias
+
     def forward(self, x):
-      return sigmoid(x / self.temp)
+      if self.training:
+        return sigmoid((x / self.temp) + self.bias)
+      else:
+        return sigmoid((x / self.temp) + self.bias).round()
 
 
 # ViT MLP
