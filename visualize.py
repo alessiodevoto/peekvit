@@ -193,10 +193,13 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
          forward_mask = forward_mask[:, :-1, :]
 
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
+      
       # replace non-zero values with 1
       if hard:
-        forward_mask = torch.nn.functional.relu(forward_mask - thresolds[layer_name])
+        # forward_mask = torch.nn.functional.relu(forward_mask - thresolds[layer_name]).ceil()
         # print(torch.any(forward_mask >= 0.5))
+        # forward_mask = forward_mask.round()
+        forward_mask = forward_mask.ceil()
         
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)

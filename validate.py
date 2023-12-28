@@ -9,13 +9,11 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, train_only_gates_and_cls_token
+from utils.utils import make_experiment_directory, load_state
 from utils.logging import SimpleLogger
 from peekvit.dataset import get_imagenette
-from models.models import build_model
-from peekvit.losses import get_loss
-from utils.topology import add_residual_gates, reinit_class_tokens
-from utils.adapters import from_vit_to_residual_vit
+from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+
 
 torch.manual_seed(0)
 
@@ -37,7 +35,7 @@ validation_args = {
     'num_workers': 4,
 }
 
-def validate(run_dir, load_from=None, epoch=None):
+def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
     # create run directory and logger 
     logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
@@ -51,7 +49,7 @@ def validate(run_dir, load_from=None, epoch=None):
     
     # get last checkpoint in the load_from directory
     load_from = join(load_from, 'checkpoints')
-    last_checkpoint = sorted(os.listdir(load_from))[-1]
+    last_checkpoint = f'epoch_{epoch}.pth' if epoch else sorted(os.listdir(load_from))[-1]
     load_from = join(load_from, last_checkpoint)
     logger.log(f'Loading model from {load_from}')
     
@@ -61,7 +59,9 @@ def validate(run_dir, load_from=None, epoch=None):
 
     # validate      
     @torch.no_grad()
-    def validate_epoch(model, loader):
+    def validate_epoch(model, loader, budget=None):
+        print('Setting budget to', budget)
+        model.set_budget(float(budget))
         model.eval()
         correct = 0
         total = 0
@@ -74,12 +74,10 @@ def validate(run_dir, load_from=None, epoch=None):
         return correct / total
     
 
-    
-    acc = validate_epoch(model, val_loader)
-    logger.log(f'Accuracy: {acc}')
-    
-    from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
-    visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None, IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}', hard=True)
+    for budget in budgets:
+        acc = validate_epoch(model, val_loader, budget=budget)
+        logger.log(f'Budget: {budget} --> Accuracy: {acc}')
+        visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None, IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}_budget_{budget}', hard=True)
    
 
 
@@ -118,7 +116,7 @@ def visualize_predictions(run_dir, epoch=None):
                             model_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                             visualization_transform = None,
                             save_dir = f'{images_dir}/epoch_{epoch_to_load}',
-                            hard=True
+                            hard=False
                             )
 
 
@@ -137,13 +135,13 @@ def visualize_predictions_in_training(model, dataset, subset, epoch, transform, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
-    parser.add_argument('--train', action='store_true')
-    parser.add_argument('--plot', action='store_true')
     parser.add_argument('--run_dir', type=str, default=None)
     parser.add_argument('--epoch', type=str, default=None)
+    parser.add_argument('--budgets', nargs='+', required=True)
+
     args = parser.parse_args()
 
     run_dir = make_experiment_directory(BASE_PATH)
-    validate(run_dir, load_from=args.run_dir)
+    validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=args.budgets)
     
 

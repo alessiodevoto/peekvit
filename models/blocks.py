@@ -65,11 +65,9 @@ class SigmoidWithTemp(nn.Module):
       self.bias = bias
 
     def forward(self, x):
-      if self.training:
-        return sigmoid((x / self.temp) + self.bias)
-      else:
-        return sigmoid((x / self.temp) + self.bias).round()
-
+      return sigmoid((x / self.temp) + self.bias)
+      
+      
 
 # ViT MLP
 class MLP(nn.Module):

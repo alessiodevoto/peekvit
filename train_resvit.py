@@ -16,6 +16,7 @@ from models.models import build_model
 from peekvit.losses import get_loss
 from utils.topology import add_residual_gates, reinit_class_tokens
 from utils.adapters import from_vit_to_residual_vit
+from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 torch.manual_seed(0)
 
@@ -52,7 +53,7 @@ gate_args = {
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'add_budget_token': True
+    'add_budget_token': True # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
 
@@ -69,12 +70,12 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.5, 0],
+    'additional_loss_weights': [10, 0],
     'additional_loss_args': {'budget': 'budget_token', 'strict':False},
     'reinit_class_tokens': True,
 }
 
-
+VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.65, 1]
 
 def train(run_dir, load_from=None):
 
@@ -124,7 +125,7 @@ def train(run_dir, load_from=None):
     # if budget is a float, it is used as a constant, else we use the budget token which is the last token in the sequence
     training_budget = training_args['additional_loss_args']['budget']
     if training_budget == 'budget_token':
-        get_training_budget = lambda batch : batch[:,-1].mean().item()
+        get_training_budget = lambda model : model.current_budget
     else:
         get_training_budget = lambda batch : training_budget
 
@@ -136,8 +137,8 @@ def train(run_dir, load_from=None):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
-            main_loss = main_criterion(out, labels) 
-            intra_reg, inter_reg = regularization(model, budget=get_training_budget(batch))
+            main_loss = main_criterion(out, labels)    
+            intra_reg, inter_reg = regularization(model, budget=get_training_budget(model))
             loss = main_loss + intra_reg * intra_weight + inter_reg * inter_weight
             loss.backward()
             optimizer.step()
@@ -152,12 +153,14 @@ def train(run_dir, load_from=None):
         
     
     @torch.no_grad()
-    def validate_epoch(model, loader):
+    def validate_epoch(model, loader, budget=None):
         model.eval()
         correct = 0
         total = 0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)
+            if budget is not None:
+                model.set_budget(float(budget))
             out = model(batch)
             _, predicted = torch.max(out.data, 1)
             total += labels.size(0)
@@ -169,10 +172,10 @@ def train(run_dir, load_from=None):
         train_epoch(model, train_loader, optimizer)
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
-            acc = validate_epoch(model, val_loader)
-            logger.log(f'Epoch {epoch:03} accuracy: {acc}')
-            from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
-            visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None,IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}', hard=False)
+            for b in VALIDATE_BUDGETS:
+                acc = validate_epoch(model, val_loader, budget=b)
+                logger.log(f'Epoch {epoch:03}, budget {b} accuracy: {acc}')
+                visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None, IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}_budget{b}', hard=True)
             
 
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
