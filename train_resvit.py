@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, train_only_gates_and_cls_token
+from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
 from utils.logging import SimpleLogger
 from peekvit.dataset import get_imagenette
 from models.models import build_model
@@ -32,19 +32,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model_class = 'ResidualVisionTransformer'
 
-"""model_args = {
-        'image_size': 160,
-        'patch_size': 8,
-        'num_classes': 10,
-        'hidden_dim': 96,
-        'num_layers': 4,
-        'num_heads': 8,
-        'mlp_dim': 128,
-        'dropout': 0.1,
-        'attention_dropout': 0.1,
-        'num_registers': 0,
-        'num_class_tokens': 1,
-    }"""
 
 
 gate_args = {
@@ -53,7 +40,7 @@ gate_args = {
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'add_budget_token': True # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
+    'add_budget_token': 'learnable' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
 
@@ -70,7 +57,7 @@ training_args = {
     'eval_every': 5,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [10, 0],
+    'additional_loss_weights': [0.1, 0],
     'additional_loss_args': {'budget': 'budget_token', 'strict':False},
     'reinit_class_tokens': True,
 }
@@ -131,7 +118,7 @@ def train(run_dir, load_from=None):
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_gates_and_cls_token(model, verbose=False)
+        model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)

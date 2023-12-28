@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from typing import List
 import torch
 import os  
 from datetime import datetime
@@ -225,6 +226,26 @@ def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
     frozen_params, trainable_params = [], []
     for param_name, param in residualvit_model.named_parameters():
         if any([x in param_name for x in ['gate', 'class', 'head', 'threshold']]):
+            param.requires_grad = True
+            trainable_params.append(param_name)
+        else:
+            param.requires_grad = False
+            frozen_params.append(param_name)
+    
+    if verbose:
+        print('Trainable parameters:', trainable_params)
+        print('Frozen parameters:', frozen_params)
+
+    return residualvit_model
+
+
+def train_only_these_params(residualvit_model, params_list: List, verbose:bool=False):
+    
+    print('Freezing all parameters except for :', params_list)
+    
+    frozen_params, trainable_params = [], []
+    for param_name, param in residualvit_model.named_parameters():
+        if any([x in param_name for x in params_list]):
             param.requires_grad = True
             trainable_params.append(param_name)
         else:

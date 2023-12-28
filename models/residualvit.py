@@ -42,7 +42,8 @@ class ResidualGate(nn.Module):
         elif threshold == 'learnable':
             self.threshold = nn.Parameter(torch.tensor(0.5))
 
-    def forward(self, x, budget=None):
+
+    def forward(self, x, budget=None, threshold=None):
 
         # x is (batch_size, seq_length, hidden_dim)
         mask_log = self.projection(x) / self.temp
@@ -56,6 +57,8 @@ class ResidualGate(nn.Module):
         if self.gate_type == 'sigmoid':
             if budget is not None:
                 mask = F.relu(mask - (1-budget)) 
+            elif threshold is not None:
+                mask = F.relu(mask - threshold)
             else:
                 mask = F.relu(mask - self.threshold)
         else:
@@ -86,13 +89,13 @@ class ResidualViTBlock(ResidualModule):
         skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_threshold: float = 0.5,
-        budget_token: bool = False,
+        budget_token: Union[bool, List, Literal['learnable']] = False,
     ):
         super().__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
-        self.budget_token = budget_token
+        self.budget_token = budget_token 
         self.num_special_tokens = num_class_tokens + num_registers
 
         # residual settings
@@ -111,6 +114,10 @@ class ResidualViTBlock(ResidualModule):
         # MLP block
         self.ln_2 = nn.LayerNorm(hidden_dim, eps=1e-06)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
+
+        # budget learner
+        if self.budget_token == 'learnable':
+            self.budget_token_gate = nn.Linear(hidden_dim, 1)
 
 
     def forward_skip_attention(self, input: torch.Tensor):
@@ -140,6 +147,7 @@ class ResidualViTBlock(ResidualModule):
         y = self.mlp(y)
 
         return y 
+
 
     def forward_skip_mlp(self, input: torch.Tensor):
 
@@ -185,14 +193,20 @@ class ResidualViTBlock(ResidualModule):
         special_tokens = input[:, :self.num_special_tokens, :]
         img_tokens = input[:, self.num_special_tokens:, :]
 
+        current_budget, threshold = None, None
         if self.budget_token:
             # budget token is the last token
             budget_token = img_tokens[:, -1:, :] 
             img_tokens = img_tokens[:, :-1, :]
+            current_budget = budget_token.mean()
+        
+        if self.budget_token == 'learnable':
+            threshold = torch.sigmoid(self.budget_token_gate(budget_token))
+            current_budget = None
 
 
         # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens, budget=budget_token.mean() if self.budget_token else None) 
+        self.mask = self.residual_gate(img_tokens, budget=current_budget, threshold=threshold)
         masked_tokens = self.mask * img_tokens 
         
 
@@ -211,6 +225,7 @@ class ResidualViTBlock(ResidualModule):
             y = y + torch.cat([torch.zeros_like(special_tokens), unmasked_tokens], dim=1)
 
         return y
+
 
     def plain_forward(self, input: torch.Tensor):
         x = self.ln_1(input)
@@ -257,7 +272,7 @@ class ResidualViTEncoder(nn.Module):
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
         gate_threshold: float = 0.5,
-        budget_token: bool = False,
+        budget_token: Union[bool, List, Literal['learnable']] = False,
 
     ):
         super().__init__()
@@ -267,6 +282,8 @@ class ResidualViTEncoder(nn.Module):
         self.num_registers = num_registers
         self.num_special_tokens = num_class_tokens + num_registers
         self.budget_token = budget_token
+        
+        self.num_budget_tokens = 0 if not budget_token else 1
 
         self.pos_embedding = nn.Parameter(torch.empty(1, seq_length, hidden_dim).normal_(std=0.02))  # from BERT
         self.dropout = nn.Dropout(dropout)
@@ -293,21 +310,51 @@ class ResidualViTEncoder(nn.Module):
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+        
         if self.budget_token:
             # budget token is the last token
-            budget_token = input[:, -1:, :]
-            input = input[:, :-1, :]
+            budget_tokens = input[:, -self.num_budget_tokens:, :]
+            input = input[:, :-self.num_budget_tokens, :]
 
         input = input + self.pos_embedding
         if self.budget_token:
-            input = torch.cat([input, budget_token], dim=1)
+            input = torch.cat([input, budget_tokens], dim=1)
         input = self.dropout(input)
         input = self.layers(input)
         return self.ln(input)
 
 
+
 class ResidualVisionTransformer(nn.Module):
-    """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
+    """
+    Residual Vision Transformer model for image classification.
+
+    Args:
+        image_size (int): The size of the input image.
+        patch_size (int): The size of each patch in the image.
+        num_layers (int): The number of layers in the model.
+        num_heads (int): The number of attention heads in each layer.
+        hidden_dim (int): The dimensionality of the hidden layers.
+        mlp_dim (int): The dimensionality of the MLP layers.
+        dropout (float, optional): The dropout rate. Defaults to 0.0.
+        attention_dropout (float, optional): The dropout rate for attention layers. Defaults to 0.0.
+        num_classes (int, optional): The number of output classes. Defaults to 1000.
+        representation_size (int, optional): The size of the output representation. Defaults to None.
+        
+        num_registers (int, optional): The number of register tokens. Defaults to 0.
+        residual_layers (List, optional): The list of residual layers. It must be a list of length `num_layers`, where each 
+            element of list can be {`attention+mlp`, `attention`, `mlp`}. Defaults to None.
+        add_input (bool, optional): Whether to add the input to the output, thus making it possible to skip tokens and reuse them
+            later on. Defaults to False.
+        num_class_tokens (int, optional): The number of class tokens. Defaults to 1. Notice that the final head will average all
+            the class tokens to produce the final output.
+        gate_type (Literal['gumbel', 'sigmoid'], optional): The type of gate for residual layers. Defaults to 'gumbel'.
+        gate_temp (float, optional): The temperature for the gate. Defaults to 1.0.
+        gate_threshold (float, optional): The threshold for the gate. CDefaults to 0.5.
+        add_budget_token (bool, optional): Whether to add a budget token at the end of each sequence. It can be True to sample
+            a budget token in [0,1], a tuple-like to specify a set of budgets to sample from, or a float to have a fixed budget 
+            across training. For now, the same budget is sampled for each batch. Defaults to False.
+    """
 
     def __init__(
         self,
@@ -323,12 +370,12 @@ class ResidualVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         residual_layers: Optional[List] = None,
-        add_input: bool = True,
+        add_input: bool = False,
         num_class_tokens: int = 1,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
         gate_threshold: float = 0.5,
-        add_budget_token: bool = False,
+        add_budget_token: Union[bool, List, Literal['learnable']] = False,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -380,11 +427,18 @@ class ResidualVisionTransformer(nn.Module):
             budget_token=add_budget_token,
             )
     
+        self.seq_length = seq_length
+
         if self.budget:
             seq_length += 1
+            self.num_budget_tokens = 1
+        
+        if self.budget == 'learnable':
+            self.learnable_budget_token_1 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+            self.learnable_budget_token_2 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+            
+            
 
-
-        self.seq_length = seq_length
 
         self.head = nn.Linear(hidden_dim, num_classes)
         nn.init.zeros_(self.head.weight)
@@ -419,34 +473,63 @@ class ResidualVisionTransformer(nn.Module):
         return x
     
     def _add_budget_token(self, x):
-        n = x.shape[0]
-        budget_token = torch.empty((n, 1, self.hidden_dim), device=x.device)
-        
-        if self.training and self.budget is not None:
-            # sample a value between 0 and 1 and create a token with that value
-            # for now the token is the same for all the batch
-    
-            if isinstance(self.budget, float):
-                self.current_budget = self.budgets
-            elif isinstance(self.budget, list) or isinstance(self.budget, tuple):
-                # select a random value from the possible budgets
-                idx = torch.randint(0, len(self.budget), (1,)).item()
-                self.current_budget = self.budget[idx]
-            else:
-                # budget_token.uniform_(0, 1)
-                self.current_budget = torch.rand(1, device=x.device).item()
+            """
+            Adds a budget token to the input tensor based on the self.budget. 
+            After calling this method, self.current_budget will contain the value of the current budget.
+
+            Args:
+                x (torch.Tensor): Input tensor of shape (batch_size, seq_len, hidden_dim).
+
+            Returns:
+                torch.Tensor: Tensor with the budget token added, of shape (batch_size, seq_len+1, hidden_dim).
             
-            budget_token = budget_token.fill_(self.current_budget)
-            self.current_budget = budget_token.mean().item()
-            x = torch.cat([x, budget_token], dim=1)
-        else:
-            if not getattr(self, 'current_budget', False):
-                raise ValueError('Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.')
-            budget_token = budget_token.fill_(self.current_budget)
-            self.current_budget = budget_token.mean().item()
-            x = torch.cat([x, budget_token], dim=1)
-        
-        return x
+            """
+            
+            n = x.shape[0]
+            budget_token = torch.empty((n, 1, self.hidden_dim), device=x.device)
+            
+            if self.training:
+                # for now the token is the same for all the batch
+                if isinstance(self.budget, float):
+                    # fixed budget
+                    self.current_budget = self.budget
+                elif isinstance(self.budget, list) or isinstance(self.budget, tuple):
+                    # select a random value from the possible budgets
+                    idx = torch.randint(0, len(self.budget), (1,)).item()
+                    self.current_budget = self.budget[idx]
+                elif isinstance(self.budget, bool):
+                    # sample a random budget in [0,1)
+                    self.current_budget = torch.rand(1, device=x.device).item()
+                elif self.budget == 'learnable':
+                    # in this case we use two learnable parameters and interpolate between them with the budget
+                    self.current_budget = torch.rand(1, device=x.device).item()
+                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
+                    batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
+                    x = torch.cat([ x,
+                                    self.current_budget * batch_budget_token_1 +
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
+                    return x
+                    
+                
+                budget_token = budget_token.fill_(self.current_budget)
+                self.current_budget = budget_token.mean().item()
+                x = torch.cat([x, budget_token], dim=1)
+            else:
+                if not getattr(self, 'current_budget', False):
+                    raise ValueError('Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.')
+                
+                if self.budget == 'learnable':
+                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
+                    batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
+                    x = torch.cat([ x,
+                                    self.current_budget * batch_budget_token_1 +
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
+                else:
+                    budget_token = budget_token.fill_(self.current_budget)
+                    self.current_budget = budget_token.mean().item()
+                    x = torch.cat([x, budget_token], dim=1)
+            
+            return x
 
     def forward(self, x: torch.Tensor):
         # Reshape and permute the input tensor
@@ -463,7 +546,8 @@ class ResidualVisionTransformer(nn.Module):
         x = torch.cat([batch_class_tokens, x], dim=1)
 
         # Add budget token
-        x = self._add_budget_token(x)
+        if self.budget:
+            x = self._add_budget_token(x)
 
 
         # Pass through the encoder
