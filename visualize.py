@@ -10,6 +10,9 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from os.path import join
 import numpy as np
+from pathlib import Path
+
+import wandb
 
 from utils.utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
@@ -38,6 +41,37 @@ def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
     return t * std + mean
 
 
+######################################################## Common ##################################################################
+
+def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
+  """
+  Plots the accuracy vs budget curve for the given budgets and accuracies.
+
+  Args:
+    budgets (List): The budgets.
+    accs (List): The accuracies.
+    save_dir (str): The directory to save the plot.
+
+  Returns:
+    None
+  """
+  fig, ax = plt.subplots()
+  ax.plot(budgets, accs, marker='o')
+
+  # set labels
+  ax.set_xlabel('Budget')
+  ax.set_ylabel('Accuracy')
+  ax.set_title('Budget vs Accuracy')
+
+  # set y range
+  plt.ylim([0.4, 0.9])
+
+  # create save dir if it does not exist
+  if save_dir is not None:
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    plt.savefig(os.path.join(save_dir, f'budget_vs_acc_{epoch}.png'))
+  
+  return fig
 
 ######################################################## MoEs ##################################################################
 
@@ -142,16 +176,29 @@ def display_expert_embeddings(model, save_dir):
 
 
 @torch.no_grad()
-def img_mask_distribution(model, images: List, subset, model_transform: Optional[None] = None, visualization_transform: Optional[None] = None, save_dir: str = None, hard: bool = False):
+def img_mask_distribution(
+  model, 
+  images: List, 
+  subset, 
+  model_transform: Optional[None] = None, 
+  visualization_transform: Optional[None] = None, 
+  save_dir: str = None, 
+  hard: bool = False, 
+  budget: str = None,
+  log_to_wandb: bool = False):
   """
-  Plot the expert distribution masks for each layer of a given model.
+  Visualizes the masking distribution of an image using a given model.
 
   Args:
-    model (nn.Module): The model for which to plot the expert distribution masks.
+    model (nn.Module): The model used for masking.
     images (List): A list of images to visualize.
     subset: The subset of images to visualize.
-    transform (Optional[None], optional): An optional transformation to apply to the images. Defaults to None.
-    save_dir (str, optional): The directory to save the generated plots. Defaults to None.
+    model_transform (Optional[None]): An optional transformation to apply to the images before passing them through the model. Default is None.
+    visualization_transform (Optional[None]): An optional transformation to apply to the images before visualization. Default is None.
+    save_dir (str): The directory to save the visualization images. Default is None.
+    hard (bool): Whether to use hard masking (1s and 0s) instead of soft masking. Default is False.
+    budget (str): The budget to use for the visualization. Default is None.
+    log_to_wandb (bool): Whether to log the images to wandb. Default is False.
   """
   
   model.eval()
@@ -164,18 +211,20 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
   patch_size = model.patch_size
   patches_per_side = (image_size // patch_size)
 
+  figs = {}
   for img_idx in tqdm(subset, desc='Preparing masking plots'):
 
     img, label = images[img_idx]
     # forward pass
     _img = model_transform(img) if model_transform is not None else img
+    model.set_budget(budget)
     out = model(make_batch(_img).to(device))
     
     from dataset import IMAGENETTE_CLASSES
     #print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks
-    gates = get_forward_masks(model)  # <residual, gating_probs>
+    gates = get_forward_masks(model, incremental=True)  # <residual, gating_probs>
     thresholds = get_learned_thresholds(model) # <residual, threshold>
     
     # prepare plot, we want a row for each residual layer,
@@ -189,9 +238,6 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
       
-      #if num_budget_tokens:
-         #forward_mask = forward_mask[:, :-num_budget_tokens, :]
-
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       
       # replace non-zero values with 1
@@ -216,7 +262,15 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
       os.makedirs(save_dir, exist_ok=True)
       plt.tight_layout()
       plt.savefig(join(save_dir, f'token_masks_batch_{img_idx}.jpg'), dpi=100)
-    plt.close()
+    
+    if log_to_wandb:
+      #wandb.log({f'{budget}/token_masks_batch_{img_idx}.jpg': wandb.Image(plt)})
+      figs[f'images/{budget}/token_masks_batch_{img_idx}.jpg'] = fig
+
+  if log_to_wandb:
+    wandb.log(figs)
+
+  plt.close()
 
 
 

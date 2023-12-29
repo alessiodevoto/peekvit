@@ -6,3 +6,4 @@ plotly
 einops
 tqdm 
 scikit-learn
+wandb

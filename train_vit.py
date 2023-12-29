@@ -223,7 +223,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=str, default=None)
     args = parser.parse_args()
     if args.train:
-        train_run_dir = make_experiment_directory(BASE_PATH)
+        train_run_dir, exp_name = make_experiment_directory(BASE_PATH)
         train(train_run_dir, args.run_dir)
         visualize_predictions(train_run_dir)
     elif args.plot:

@@ -506,9 +506,10 @@ class ResidualVisionTransformer(nn.Module):
                     self.current_budget = torch.rand(1, device=x.device).item()
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    x = torch.cat([ x,
+                    '''x = torch.cat([ x,
                                     self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)'''
+                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
                     return x
                     
                 
@@ -522,9 +523,10 @@ class ResidualVisionTransformer(nn.Module):
                 if self.budget == 'learnable':
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    x = torch.cat([ x,
+                    '''x = torch.cat([ x,
                                     self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)'''
+                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
                 else:
                     budget_token = budget_token.fill_(self.current_budget)
                     self.current_budget = budget_token.mean().item()

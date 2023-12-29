@@ -10,8 +10,8 @@ import argparse
 
 
 from utils.utils import make_experiment_directory, load_state
-from utils.logging import SimpleLogger
-from .dataset import get_imagenette
+from utils.logging import SimpleLogger, WandbLogger
+from peekvit.dataset import get_imagenette
 from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
@@ -28,18 +28,26 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-
-
 validation_args = {
     'eval_batch_size': 64,
     'num_workers': 4,
+    'save_images_locally': True,
+    'save_images_to_wandb': False,
+    'masks': False,
 }
 
+@torch.no_grad()
 def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
-    # create run directory and logger 
-    logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
-    logger.log(f'Experiment name: {run_dir}')
+    print(budgets)
+
+    # logging
+    if validation_args['save_images_to_wandb']:
+        logger = WandbLogger(wandb_run=exp_name, wandb_run_dir=run_dir)
+    else:
+        # create run directory and logger 
+        logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
+        logger.log(f'Experiment name: {run_dir}')
 
 
     # dataset and dataloader
@@ -55,81 +63,49 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
     
     model, _, epoch, model_args, _ = load_state(load_from, model=None, optimizer=None)
     model = model.to(device)
-
-
-    # validate      
-    @torch.no_grad()
-    def validate_epoch(model, loader, budget=None):
-        print('Setting budget to', budget)
-        model.set_budget(float(budget))
-        model.eval()
+    model.eval()
+    
+    accs = []
+    for budget in budgets:
+        
+        # compute accuracy given budget
         correct = 0
         total = 0
-        for batch, labels in tqdm(loader):
+        for batch, labels in tqdm(val_loader, desc=f'Validating epoch {epoch} with budget {budget}'):
             batch, labels = batch.to(device), labels.to(device)
+            if budget is not None:
+                model.set_budget(budget)
             out = model(batch)
             _, predicted = torch.max(out.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-        return correct / total
-    
-
-    for budget in budgets:
-        acc = validate_epoch(model, val_loader, budget=budget)
-        logger.log(f'Budget: {budget} --> Accuracy: {acc}')
-        visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None, IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}_budget_{budget}', hard=True)
-   
+        acc = correct / total
+        logger.log({f'val_accuracy/budget_{budget}': acc})
+        accs.append(acc)
 
 
-
-
-def visualize_predictions(run_dir, epoch=None):
-
-    
-    # load model from last epoch or specified epoch
-    last_checkpoint = validation_args['num_epochs'] if validation_args['num_epochs'] > validation_args['checkpoint_every'] else 0
-    epoch_to_load = epoch if epoch is not None else last_checkpoint
-    checkpoint_path = join(run_dir, 'checkpoints', f'epoch_{epoch_to_load:03}.pth')
-    model, optimizer, epoch, model_args, noise_args = load_state(checkpoint_path, model=None, optimizer=None)    
-    
-    images_dir = join(run_dir, 'images')
-
-    # transform without normalization for visualization
-    visualization_transform = T.Compose([
-        T.Resize(160),
-        T.CenterCrop(160),
-        T.ToTensor(),
-    ])
-    
-    # load dataset
-    # you can decide here how many images you want to visualize
-    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, test_transform=visualization_transform)
-    subset = torch.arange(0, 4000, 400) 
-
-
-    # visualize predictions
-    from visualize import img_mask_distribution
-
-    img_mask_distribution(model, 
-                            val_dataset,
-                            subset, 
-                            model_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                            visualization_transform = None,
-                            save_dir = f'{images_dir}/epoch_{epoch_to_load}',
-                            hard=False
-                            )
-
-
-def visualize_predictions_in_training(model, dataset, subset, epoch, transform, visualization_transform, save_dir, hard=False):
-    from visualize import img_mask_distribution
-    img_mask_distribution(model, 
-                        dataset,
-                        subset, 
-                        model_transform = transform,
-                        visualization_transform = visualization_transform,
-                        save_dir = save_dir,
-                        hard=hard
+        # visualize predictions
+        if validation_args['masks']:
+            from visualize import img_mask_distribution
+            img_mask_distribution(model, 
+                        val_dataset,
+                        torch.arange(0, 4000, 400), 
+                        model_transform = None,
+                        visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
+                        save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if validation_args['save_images_locally'] else None,
+                        hard=True,
+                        budget=budget,
+                        log_to_wandb=validation_args['save_images_to_wandb'],
                         )
+
+    # log accuracy vs budget
+    from visualize import plot_budget_vs_acc
+    print(accs)
+    print(budgets)
+    fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
+    if validation_args['save_images_to_wandb']:
+        logger.log({'val_accuracy_vs_budget': fig})
+
 
 
 
@@ -141,7 +117,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    run_dir = make_experiment_directory(BASE_PATH)
-    validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=args.budgets)
+    run_dir, exp_name = make_experiment_directory(BASE_PATH)
+    validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=[float(b) for b in args.budgets])
     
 

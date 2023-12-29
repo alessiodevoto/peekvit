@@ -10,15 +10,34 @@ import argparse
 
 
 from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
-from utils.logging import SimpleLogger
-from .dataset import get_imagenette
+from utils.logging import WandbLogger, SimpleLogger
+from peekvit.dataset import get_imagenette
 from models.models import build_model
-from .losses import get_loss
+from peekvit.losses import get_loss
 from utils.topology import add_residual_gates, reinit_class_tokens
 from utils.adapters import from_vit_to_residual_vit
-from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 torch.manual_seed(0)
+
+
+
+"""
+Explanation of this script:
+- this script is a simple example of how to train a ResidualVisionTransformer with residual gates
+- the model is trained on the Imagenette dataset
+- the model is trained with a cross entropy loss and a regularization loss, see `losses.py` for more details
+- the ResidualVisionTransformer can be initialized from a pretrained VisionTransformer, in this case, you must provide a `--run_dir` argument. 
+    If you do not provide this argument, the model is initialized randomly with the provided `model_args` and `gate_args`.
+
+- for the budget regularization (`add_budget_token` parameter), you can choose among:
+    - a constant budget, appended to the input sequence
+    - a budget sampled from a uniform distribution, appended to the input sequence
+    - a budget sampled from a list of budgets, appended to the input sequence
+    - `learnable` budget. In this case, we sample a budget and use it to interpolate between two lernable tokens, which are appended to the input sequence.
+"""
+
+
 
 
 # PATHS 
@@ -26,13 +45,17 @@ torch.manual_seed(0)
 DATASET_ROOT = '/home/aledev/projects/moe-workspace/data/imagenette'
 BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs' 
 
+# WANDB
+wandb_entity = 'aledevo'
+wandb_project = 'peekvit'
+
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model_class = 'ResidualVisionTransformer'
 
-
+model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
     'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
@@ -43,50 +66,42 @@ gate_args = {
     'add_budget_token': 'learnable' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
-
-
-# noise_args = None
-# gate_args = None
-
-
 training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-3,
     'num_epochs': 100,
-    'eval_every': 5,
+    'eval_every': 10,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.1, 0],
-    'additional_loss_args': {'budget': 'budget_token', 'strict':False},
+    'additional_loss_weights': [0.01, 0],
+    'additional_loss_args': {'budget': 'budget_token', 'strict': False},
     'reinit_class_tokens': True,
-}
+    'wandb': True,
+    'save_images_locally': False,
+    'save_images_to_wandb': True,
+    }
 
-VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.65, 1]
 
-def train(run_dir, load_from=None):
+VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.85]
+
+
+def train(run_dir, load_from=None, exp_name=None):
 
     # create run directory and logger 
     checkpoints_dir = join(run_dir, 'checkpoints')
-    logger = SimpleLogger(join(run_dir, 'logs.txt'))
-    logger.log(f'Experiment name: {run_dir}')
-    # logger.log(noise_args)
-    logger.log(gate_args)
-    logger.log(training_args)
-
-
+    
     # dataset and dataloader
     train_dataset, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
     train_loader = DataLoader(train_dataset, batch_size=training_args['train_batch_size'], shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=training_args['eval_batch_size'], shuffle=False, num_workers=4, pin_memory=True)
 
-    
     # get last checkpoint in the load_from directory
     if load_from is not None:
         load_from = join(load_from, 'checkpoints')
         last_checkpoint = sorted(os.listdir(load_from))[-1]
         load_from = join(load_from, last_checkpoint)
-        logger.log(f'Loading model from {load_from}')
+        print(f'Loading model from {load_from}')
         checkpoint_model_class = torch.load(load_from)['model_class']
         if checkpoint_model_class == 'VisionTransformer':
             model, model_args = from_vit_to_residual_vit(load_from, gate_args)
@@ -95,7 +110,13 @@ def train(run_dir, load_from=None):
     else:
         model = build_model(model_class, model_args, noise_args=None)
     
- 
+    # logging
+    if training_args['wandb']:
+        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args, wandb_run=exp_name, wandb_run_dir=run_dir)
+    else:
+        logger = SimpleLogger(join(run_dir, 'logs.txt'))
+    
+    # adjust model
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
     
@@ -117,11 +138,11 @@ def train(run_dir, load_from=None):
         # training budget is a float
         get_training_budget = lambda batch : training_budget
 
-    def train_epoch(model, loader, optimizer):
+    def train_epoch(model, loader, optimizer, epoch=None):
         model.train()
-        model = train_only_these_params(model, verbose=True, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
+        model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
-        for batch, labels in tqdm(loader):
+        for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
@@ -137,37 +158,61 @@ def train(run_dir, load_from=None):
             running_intra += intra_reg.detach().item() * intra_weight
             running_inter += inter_reg.detach().item() * inter_weight
 
-        logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
-        
-    
+        # logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
+        logger.log({'train_loss': running_loss / len(loader), 'train_main_loss': running_main_loss / len(loader), 'train_intra': running_intra / len(loader), 'train_inter': running_inter / len(loader)})
+
+
     @torch.no_grad()
-    def validate_epoch(model, loader, budget=None):
+    def validate_epoch(model, loader, budgets=None, epoch=None):
         model.eval()
-        correct = 0
-        total = 0
-        for batch, labels in tqdm(loader):
-            batch, labels = batch.to(device), labels.to(device)
-            if budget is not None:
-                model.set_budget(float(budget))
-            out = model(batch)
-            _, predicted = torch.max(out.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        return correct / total
+        
+        accs = []
+        for budget in budgets:
+            
+            # compute accuracy given budget
+            correct = 0
+            total = 0
+            for batch, labels in tqdm(loader, desc=f'Validating epoch {epoch} with budget {budget}'):
+                batch, labels = batch.to(device), labels.to(device)
+                if budget is not None:
+                    model.set_budget(float(budget))
+                out = model(batch)
+                _, predicted = torch.max(out.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            acc = correct / total
+            logger.log({f'val_accuracy/budget_{budget}': acc})
+            accs.append(acc)
+
+
+            # visualize predictions
+            from visualize import img_mask_distribution
+            img_mask_distribution(model, 
+                        val_dataset,
+                        torch.arange(0, 4000, 400), 
+                        model_transform = None,
+                        visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
+                        save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if training_args['save_images_locally'] else None,
+                        hard=True,
+                        budget=budget,
+                        log_to_wandb=training_args['save_images_to_wandb'],
+                        )
+
+        # log accuracy vs budget
+        from visualize import plot_budget_vs_acc
+        logger.log({'val_accuracy_vs_budget': plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)})
+            
     
 
     for epoch in range(training_args['num_epochs']+1):
-        train_epoch(model, train_loader, optimizer)
+        train_epoch(model, train_loader, optimizer, epoch=epoch)
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
-            for b in VALIDATE_BUDGETS:
-                acc = validate_epoch(model, val_loader, budget=b)
-                logger.log(f'Epoch {epoch:03}, budget {b} accuracy: {acc}')
-                visualize_predictions_in_training(model, val_dataset, torch.arange(0, 4000, 400), epoch, None, IMAGENETTE_DENORMALIZE_TRANSFORM, f'{run_dir}/images/epoch_{epoch}_budget{b}', hard=True)
+            validate_epoch(model, val_loader, VALIDATE_BUDGETS, epoch=epoch)
             
-
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, model_args, None, optimizer, epoch)
+     
 
 
 def visualize_predictions(run_dir, epoch=None):
@@ -202,20 +247,8 @@ def visualize_predictions(run_dir, epoch=None):
                             subset, 
                             model_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                             save_dir = f'{images_dir}/epoch_{epoch_to_load}',
-                            hard=True
+                            hard=True,
                             )
-
-
-def visualize_predictions_in_training(model, dataset, subset, epoch, transform, visualizzation_transform, save_dir, hard=False):
-    from visualize import img_mask_distribution
-    img_mask_distribution(model, 
-                        dataset,
-                        subset, 
-                        model_transform = transform,
-                        visualization_transform=visualizzation_transform,
-                        save_dir = save_dir,
-                        hard=hard
-                        )
 
 
 
@@ -243,12 +276,12 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=str, default=None)
     args = parser.parse_args()
     if args.train:
-        train_run_dir = make_experiment_directory(BASE_PATH)
-        train(train_run_dir, args.run_dir)
-        visualize_predictions(train_run_dir)
+        train_run_dir, exp_name = make_experiment_directory(BASE_PATH)
+        train(run_dir=train_run_dir, load_from=args.run_dir, exp_name=exp_name)
+        visualize_predictions(run_dir=train_run_dir)
     elif args.plot:
         run_dir = args.run_dir
-        visualize_predictions(run_dir, epoch=args.epoch)
+        visualize_predictions(run_dir=run_dir, epoch=args.epoch)
         # visualize_experts(run_dir)
     
 

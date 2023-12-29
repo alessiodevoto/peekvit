@@ -15,10 +15,13 @@ def make_experiment_directory(base_path):
         base_path (str): The base path where the experiment directory will be created.
     Returns:
         str: The path of the newly created experiment directory.
+        str: The formatted date and time of the experiment, i.e. the experiment name.
     """
     now = datetime.now()
     formatted_date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
-    return join(base_path, formatted_date_time)
+    exp_dir = join(base_path, formatted_date_time)
+    os.makedirs(exp_dir, exist_ok=True)
+    return exp_dir, formatted_date_time
 
 
 def make_batch(x: torch.Tensor):
@@ -83,7 +86,7 @@ def get_last_forward_gates(model):
 ######################################################## Residual ##################################################################
 
 
-def get_forward_masks(model):
+def get_forward_masks(model, incremental=False):
     """
     Retrieves the forward masks from a given residual model.
 
@@ -96,10 +99,15 @@ def get_forward_masks(model):
     """
     from models.residualvit import ResidualModule
     masks = {}
+    previous_mask = torch.tensor(1.0)
     for module_name, module in model.named_modules():
         if isinstance(module, ResidualModule) and module.skip not in {None, 'none'}:
-            masks[module_name] = module.mask # (batch_size, sequence_len, 1)
-
+            if not incremental:
+                masks[module_name] = module.mask  # (batch_size, sequence_len, 1)
+            else:
+                masks[module_name] = (module.mask * previous_mask.ceil()) 
+                previous_mask = masks[module_name]
+    
     return masks
 
 

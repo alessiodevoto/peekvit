@@ -1,4 +1,5 @@
 import os
+import wandb
 from pprint import pprint
 
 ######################################################## Logging ##################################################################
@@ -20,3 +21,28 @@ class SimpleLogger:
     
     def close(self):
         self.log_file.close()
+
+
+class WandbLogger:
+    """
+    Logger for logging to wandb.
+    """
+    def __init__(self, entity, project, config, wandb_run=None, wandb_run_dir=None):
+        self.entity = entity
+        self.project = project
+        self.wandb_run = wandb_run
+        self.config = config
+
+        wandb.init(
+            entity=entity,
+            project=project,
+            config=config,
+            name=wandb_run,
+            dir=wandb_run_dir
+        )
+    
+    def log(self, dict_to_log):
+        wandb.log(dict_to_log)
+    
+    def close(self):
+        wandb.finish()

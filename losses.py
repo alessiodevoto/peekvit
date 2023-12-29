@@ -83,7 +83,7 @@ def entropy_per_blocks(model, **kwargs):
     return torch.mean(intra_entopy), torch.mean(inter_entropy),
 
 
-def solo_l1(model, budget: float = 0.25, **kwargs):
+def solo_l1(model, budget: float = 0.25, strict:bool = False, **kwargs):
 
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
     masks = get_forward_masks(model)
@@ -131,7 +131,7 @@ def l1_and_intraentropy(model, budget: float = 0.65, **kwargs):
     intra_entropy = []
     for _, mask in masks.items():
         sparsity = reduce(mask, 'b s 1 -> b', 'mean')
-        sparsity_loss.append(torch.sum(torch.abs(sparsity - budget)))
+        sparsity_loss.append(torch.sum(torch.abs(relu(sparsity - budget))))
     
         intra_entropy.append(entr(sparsity))
     
