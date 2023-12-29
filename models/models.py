@@ -37,11 +37,4 @@ def build_model(model_class, model_args, noise_settings=None):
     
     model = MODELS_MAP[model_class](**model_args)
 
-    if noise_settings is not None:
-        print(noise_settings)
-        from peekvit.utils import add_noise
-        noise_layers = noise_settings['layers']
-        for layer in noise_layers:
-            model = add_noise(model, layer, **noise_settings)
-
     return model

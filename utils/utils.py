@@ -127,10 +127,10 @@ def get_learned_thresholds(model):
 ######################################################## Noise ##################################################################
 
 
-def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float = None, **kwargs):
+def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float = None, prob: float = None, **kwargs):
     """
     Adds a noise module to the specified layer of the model's encoder. The model must be a transformer, 
-    and it must have an encoder with a layers attribute.
+    and it must have an encoder with a `layers` attribute containing Transformer blocks.
     
     Args:
         model (nn.Module): The model to which the noise module will be added.

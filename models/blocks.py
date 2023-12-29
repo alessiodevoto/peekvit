@@ -97,19 +97,23 @@ class SelfAttention(nn.Module):
 
 # A class to add random noise to the input according to a specific signal to noise ratio or std deviation
 class SNRNoise(nn.Module):
-    def __init__(self, noise_type: str = 'gaussian', snr = None, std = None):
+    def __init__(self, noise_type: str = 'gaussian', snr = None, std = None, prob = None):
       super().__init__()
       self.snr = snr
       self.std = std
       self.noise_type = noise_type
 
-      if snr is None and std is None:
-        raise ValueError("Either snr or std must be specified")
-      elif snr is not None and std is not None:
-        raise ValueError("Only one of snr or std must be specified")
-      
-      if noise_type not in {'gaussian'}:
-        raise ValueError("noise_type must be one of {'gaussian'}")
+      if self.noise_type == 'token_drop':
+        if prob is None:
+           raise ValueError("prob must be specified for token_drop noise")
+        self.prob = prob
+      elif self.noise_type == 'gaussian':
+        if snr is None and std is None:
+          raise ValueError("Either snr or std must be specified")
+        elif snr is not None and std is not None:
+          raise ValueError("Only one of snr or std must be specified")
+      else:
+        raise ValueError("noise_type must be one of {'gaussian', 'token_drop'}")
     
     def forward_snr(self, x: torch.Tensor):
       """
@@ -132,6 +136,22 @@ class SNRNoise(nn.Module):
       """
       return x + torch.randn_like(x, requires_grad=False) * self.std
     
+    
+    def forward_token_mask(self, x: torch.Tensor):
+      """
+      Masks tokens by zeroing them according to the given probability.
+      """
+      # input has shape (batch_size, sequence_length, hidden_dim)
+      noise = torch.ones_like(x, requires_grad=False)
+      # compute the number of tokens to mask
+      num_mask = int(self.prob * x.shape[1])
+      # sample the indices of the tokens to mask
+      mask_indices = torch.randperm(x.shape[1])[:num_mask]
+      # mask the tokens
+      noise[:, mask_indices, :] = 0
+      # add the noise
+      return x * noise
+    
     @torch.no_grad()
     def forward(self, x: torch.Tensor):
       """
@@ -140,8 +160,10 @@ class SNRNoise(nn.Module):
       """
       if self.snr is not None:
         return self.forward_snr(x)
-      else:
+      elif self.std is not None:
         return self.forward_std(x)
+      else:
+         return self.forward_token_mask(x)
 
 
 

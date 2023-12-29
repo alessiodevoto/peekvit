@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, load_state
+from utils.utils import make_experiment_directory, load_state, add_noise
 from utils.logging import SimpleLogger, WandbLogger
 from peekvit.dataset import get_imagenette
 from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
@@ -36,10 +36,15 @@ validation_args = {
     'masks': False,
 }
 
+noise_args = {
+    'noise_type': 'token_drop',
+    'snr': None,
+    'layer': 2,
+    'prob': 0.2,
+    }
+
 @torch.no_grad()
 def validate(run_dir, load_from=None, epoch=None, budgets=None):
-
-    print(budgets)
 
     # logging
     if validation_args['save_images_to_wandb']:
@@ -64,6 +69,11 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
     model, _, epoch, model_args, _ = load_state(load_from, model=None, optimizer=None)
     model = model.to(device)
     model.eval()
+
+    # add noise
+    if noise_args != {}:
+        model = add_noise(model, **noise_args)
+        
     
     accs = []
     for budget in budgets:
@@ -73,7 +83,7 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
         total = 0
         for batch, labels in tqdm(val_loader, desc=f'Validating epoch {epoch} with budget {budget}'):
             batch, labels = batch.to(device), labels.to(device)
-            if budget is not None:
+            if hasattr(model, 'set_budget'):
                 model.set_budget(budget)
             out = model(batch)
             _, predicted = torch.max(out.data, 1)

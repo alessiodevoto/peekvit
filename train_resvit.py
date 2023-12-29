@@ -11,12 +11,13 @@ import argparse
 
 from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
 from utils.logging import WandbLogger, SimpleLogger
-from peekvit.dataset import get_imagenette
 from models.models import build_model
-from peekvit.losses import get_loss
 from utils.topology import add_residual_gates, reinit_class_tokens
 from utils.adapters import from_vit_to_residual_vit
+from utils.utils import add_noise
 from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.dataset import get_imagenette
+from peekvit.losses import get_loss
 
 torch.manual_seed(0)
 
@@ -59,6 +60,7 @@ model_args = {} # we use a pretrained model, so we do not need to specify the mo
 
 gate_args = {
     'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    # 'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
@@ -69,18 +71,27 @@ gate_args = {
 training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
-    'lr': 1e-3,
+    'lr': 1e-4,
     'num_epochs': 100,
     'eval_every': 10,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.01, 0],
+    'additional_loss_weights': [0.1, 0],
     'additional_loss_args': {'budget': 'budget_token', 'strict': False},
     'reinit_class_tokens': True,
     'wandb': True,
     'save_images_locally': False,
     'save_images_to_wandb': True,
     }
+
+"""noise_args = {
+    'layer': 2,
+    'noise_type': 'gaussian',
+    'snr': 200,
+}"""
+
+noise_args = {}
+
 
 
 VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.85]
@@ -108,17 +119,22 @@ def train(run_dir, load_from=None, exp_name=None):
         elif checkpoint_model_class == 'ResidualVisionTransformer':
             model, _, _, model_args, _ = load_state(load_from, model=None, optimizer=None)
     else:
-        model = build_model(model_class, model_args, noise_args=None)
+        model = build_model(model_class, model_args)
     
     # logging
     if training_args['wandb']:
-        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args, wandb_run=exp_name, wandb_run_dir=run_dir)
+        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args, wandb_run=exp_name, wandb_run_dir=run_dir)
     else:
         logger = SimpleLogger(join(run_dir, 'logs.txt'))
     
     # adjust model
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
+    
+    # add noise
+    if noise_args != {}:
+        model = add_noise(model, **noise_args)
+        print(model)
     
 
     # training 
