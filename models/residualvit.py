@@ -59,6 +59,7 @@ class ResidualGate(nn.Module):
                 mask = F.relu(mask - (1-budget)) 
             elif threshold is not None:
                 mask = F.relu(mask - threshold)
+                self.threshold = threshold
             else:
                 mask = F.relu(mask - self.threshold)
         else:
@@ -501,7 +502,7 @@ class ResidualVisionTransformer(nn.Module):
                     # sample a random budget in [0,1)
                     self.current_budget = torch.rand(1, device=x.device).item()
                 elif self.budget == 'learnable':
-                    # in this case we use two learnable parameters and interpolate between them with the budget
+                    # in this case we use two learnable parameters and interpolate between them with a random budget
                     self.current_budget = torch.rand(1, device=x.device).item()
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)

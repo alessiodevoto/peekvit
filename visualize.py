@@ -176,7 +176,7 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
 
     # retrieve last forward masks
     gates = get_forward_masks(model)  # <residual, gating_probs>
-    thresolds = get_learned_thresholds(model) # <redsidual, thre>
+    thresholds = get_learned_thresholds(model) # <residual, threshold>
     
     # prepare plot, we want a row for each residual layer,
     # and two columns, one for the image and one for token masks
@@ -189,8 +189,8 @@ def img_mask_distribution(model, images: List, subset, model_transform: Optional
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
       
-      """if num_budget_tokens:
-         forward_mask = forward_mask[:, :-num_budget_tokens, :]"""
+      #if num_budget_tokens:
+         #forward_mask = forward_mask[:, :-num_budget_tokens, :]
 
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       

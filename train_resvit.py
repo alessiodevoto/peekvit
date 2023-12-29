@@ -11,9 +11,9 @@ import argparse
 
 from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
 from utils.logging import SimpleLogger
-from peekvit.dataset import get_imagenette
+from .dataset import get_imagenette
 from models.models import build_model
-from peekvit.losses import get_loss
+from .losses import get_loss
 from utils.topology import add_residual_gates, reinit_class_tokens
 from utils.adapters import from_vit_to_residual_vit
 from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
@@ -114,11 +114,12 @@ def train(run_dir, load_from=None):
     if training_budget == 'budget_token':
         get_training_budget = lambda model : model.current_budget
     else:
+        # training budget is a float
         get_training_budget = lambda batch : training_budget
 
     def train_epoch(model, loader, optimizer):
         model.train()
-        model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
+        model = train_only_these_params(model, verbose=True, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader):
             batch, labels = batch.to(device), labels.to(device)

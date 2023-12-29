@@ -1,0 +1,8 @@
+torch 
+torchvision
+torchaudio
+matplotlib
+plotly
+einops
+tqdm 
+scikit-learn

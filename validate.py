@@ -11,7 +11,7 @@ import argparse
 
 from utils.utils import make_experiment_directory, load_state
 from utils.logging import SimpleLogger
-from peekvit.dataset import get_imagenette
+from .dataset import get_imagenette
 from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
