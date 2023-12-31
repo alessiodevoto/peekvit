@@ -103,6 +103,7 @@ class SNRNoise(nn.Module):
       self.std = std
       self.noise_type = noise_type
 
+      # TODO fix forward here 
       if self.noise_type == 'token_drop':
         if prob is None:
            raise ValueError("prob must be specified for token_drop noise")

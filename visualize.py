@@ -73,6 +73,37 @@ def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
   
   return fig
 
+
+def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
+  """
+  Plots the accuracy vs noise curve for the given noises and accuracies.
+
+  Args:
+    noise (List): The noises.
+    accs (List): The accuracies.
+    save_dir (str): The directory to save the plot.
+
+  Returns:
+    None
+  """
+  fig, ax = plt.subplots()
+  ax.plot(budgets, accs, marker='o')
+
+  # set labels
+  ax.set_xlabel('Noise')
+  ax.set_ylabel('Accuracy')
+  ax.set_title('Noise vs Accuracy' if additional_label is None else f'Noise vs Accuracy ({additional_label})')
+
+  # set y range
+  plt.ylim([0.1, 0.9])
+
+  # create save dir if it does not exist
+  if save_dir is not None:
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    plt.savefig(os.path.join(save_dir, f'noise_vs_acc_{epoch}.png'))
+  
+  return fig
+
 ######################################################## MoEs ##################################################################
 
 

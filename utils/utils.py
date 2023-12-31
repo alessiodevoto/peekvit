@@ -135,12 +135,13 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
     Args:
         model (nn.Module): The model to which the noise module will be added.
         layer (int): The index of the layer where the noise module will be inserted.
-        noise_type (str): The type of noise to add. Must be one of {'gaussian'}.
+        noise_type (str): The type of noise to add. Must be one of {'gaussian', 'token_drop'}.
         noise_std (float): The standard deviation of the noise.
         noise_snr (float): The signal-to-noise ratio of the noise.
+        prob (float): The probability of applying the noise for token dropping.
     """
     from models.blocks import SNRNoise
-    noise_module = SNRNoise(noise_type=noise_type, std=std, snr=snr)
+    noise_module = SNRNoise(noise_type=noise_type, std=std, snr=snr, prob=prob)
     new_layers = list(model.encoder.layers)
 
     # this could be an ordered dict or a list, deal with both cases

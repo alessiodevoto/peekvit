@@ -59,8 +59,8 @@ model_class = 'ResidualVisionTransformer'
 model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    # 'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
+    #'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
@@ -71,17 +71,17 @@ gate_args = {
 training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
-    'lr': 1e-4,
+    'lr': 1e-3,
     'num_epochs': 100,
     'eval_every': 10,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.1, 0],
+    'additional_loss_weights': [1, 0],
     'additional_loss_args': {'budget': 'budget_token', 'strict': False},
     'reinit_class_tokens': True,
-    'wandb': True,
-    'save_images_locally': False,
-    'save_images_to_wandb': True,
+    'wandb': False,
+    'save_images_locally': True,
+    'save_images_to_wandb': False,
     }
 
 """noise_args = {
@@ -216,7 +216,8 @@ def train(run_dir, load_from=None, exp_name=None):
 
         # log accuracy vs budget
         from visualize import plot_budget_vs_acc
-        logger.log({'val_accuracy_vs_budget': plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)})
+        val_accuracy_vs_budget_fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)
+        logger.log({'val_accuracy_vs_budget': val_accuracy_vs_budget_fig})
             
     
 
@@ -298,6 +299,6 @@ if __name__ == '__main__':
     elif args.plot:
         run_dir = args.run_dir
         visualize_predictions(run_dir=run_dir, epoch=args.epoch)
-        # visualize_experts(run_dir)
+        
     
 

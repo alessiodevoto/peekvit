@@ -31,13 +31,15 @@ BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs'
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+IMAGE_SIZE = 160
+
 model_class = 'VisionTransformer'
 
-model_args = {
+"""model_args = {
         'image_size': 160,
         'patch_size': 8,
         'num_classes': 10,
-        'hidden_dim': 128,
+        'hidden_dim': 256,
         'num_layers': 4,
         'num_heads': 8,
         'mlp_dim': 378,
@@ -45,8 +47,21 @@ model_args = {
         'attention_dropout': 0.1,
         'num_registers': 0,
         'num_class_tokens': 1,
-    }
+    }"""
 
+model_args = {
+        'image_size': IMAGE_SIZE,
+        'patch_size': 8,
+        'num_classes': 10,
+        'hidden_dim': 512,
+        'num_layers': 8,
+        'num_heads': 8,
+        'mlp_dim': 2048,
+        'dropout': 0.1,
+        'attention_dropout': 0.1,
+        'num_registers': 0,
+        'num_class_tokens': 1,
+    }
 
 
 noise_args = None
@@ -59,7 +74,7 @@ training_args = {
     'lr': 1e-3,
     'num_epochs': 300,
     'eval_every': 10,
-    'checkpoint_every': 20,
+    'checkpoint_every': 30,
     'additional_loss': None ,
     'additional_loss_weights': [0,0],
     'additional_loss_args': None,
@@ -176,8 +191,8 @@ def visualize_predictions(run_dir, epoch=None):
 
     # transform without normalization for visualization
     visualization_transform = T.Compose([
-        T.Resize(160),
-        T.CenterCrop(160),
+        T.Resize(IMAGE_SIZE),
+        T.CenterCrop(IMAGE_SIZE),
         T.ToTensor(),
     ])
     

@@ -29,6 +29,8 @@ IMAGENETTE_DENORMALIZE_TRANSFORM = T.Compose([
 
 IMAGENETTE_CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church', 'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
+
+
 def get_imagenette(root, train_transform=IMAGENETTE_TRAIN_TRANSFORM, test_transform=IMAGENETTE_TEST_TRANSFORM, target_transform=None):
     """
     Retrieves the Imagenette dataset from the specified root directory.
