@@ -1,3 +1,4 @@
+from typing import Any, Literal
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -96,26 +97,18 @@ class SelfAttention(nn.Module):
 
 
 # A class to add random noise to the input according to a specific signal to noise ratio or std deviation
-class SNRNoise(nn.Module):
-    def __init__(self, noise_type: str = 'gaussian', snr = None, std = None, prob = None):
+class NoiseBlock(nn.Module):
+    def __init__(self, noise_type: Literal['gaussian', 'token_drop'] = 'gaussian', snr = None, std = None, prob = None):
       super().__init__()
+      self.noise_type = noise_type
       self.snr = snr
       self.std = std
-      self.noise_type = noise_type
+      self.prob = prob
+ 
+      if not any([snr, std, prob]):
+        print('Lazy initialization of noise block. Please set the noise parameters using set_snr, set_std or set_prob before using the block.')
 
-      # TODO fix forward here 
-      if self.noise_type == 'token_drop':
-        if prob is None:
-           raise ValueError("prob must be specified for token_drop noise")
-        self.prob = prob
-      elif self.noise_type == 'gaussian':
-        if snr is None and std is None:
-          raise ValueError("Either snr or std must be specified")
-        elif snr is not None and std is not None:
-          raise ValueError("Only one of snr or std must be specified")
-      else:
-        raise ValueError("noise_type must be one of {'gaussian', 'token_drop'}")
-    
+
     def forward_snr(self, x: torch.Tensor):
       """
       Adds noise to the input according to the given signal to noise ratio.
@@ -138,10 +131,13 @@ class SNRNoise(nn.Module):
       return x + torch.randn_like(x, requires_grad=False) * self.std
     
     
-    def forward_token_mask(self, x: torch.Tensor):
+    def forward_token_drop(self, x: torch.Tensor):
       """
       Masks tokens by zeroing them according to the given probability.
       """
+      if self.prob == 0:
+        return x
+
       # input has shape (batch_size, sequence_length, hidden_dim)
       noise = torch.ones_like(x, requires_grad=False)
       # compute the number of tokens to mask
@@ -164,53 +160,25 @@ class SNRNoise(nn.Module):
       elif self.std is not None:
         return self.forward_std(x)
       else:
-         return self.forward_token_mask(x)
+         return self.forward_token_drop(x)
+    
+    def set_snr(self, snr: float):
+      assert self.noise_type == 'gaussian'
+      self.snr = snr
+      self.std = None
+      self.prob = None
+    
+    def set_prob(self, prob: float):
+      assert self.noise_type == 'token_drop'
+      self.snr = None
+      self.std = None
+      self.prob = prob
 
+    def set_value(self, value: float):
+      if self.noise_type == 'gaussian':
+        self.set_snr(value)
+      else:
+        self.set_prob(value)
 
-
-
-'''class TokenNoise(nn.Module):
-    def __init__(self, p=0.5):
-        """
-        Custom dropout module.
-
-        Args:
-            p (float): Probability of an element to be zeroed. Default: 0.5
-        """
-        super(TokenNoise, self).__init__()
-        if p < 0 or p > 1:
-            raise ValueError("dropout probability has to be between 0 and 1, but got {}".format(p))
-        self.p = p
-
-    def forward(self, x):
-        """
-        Forward pass of the custom dropout module.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor after applying dropout.
-        """
-        if self.training:
-            # Generate a binary mask with zeros and ones based on the dropout probability
-            mask = torch.rand_like(x) > self.p
-            # Scale the output to account for dropped elements during training
-            return x * mask / (1 - self.p)
-        else:
-            # During evaluation, just return the input as is
-            return x
-
-# Example usage:
-# Create an instance of CustomDropout with a dropout probability of 0.5
-dropout_layer = CustomDropout(p=0.5)
-
-# Apply the dropout layer to an input tensor
-input_tensor = torch.randn(1, 10)
-output_tensor = dropout_layer(input_tensor)
-
-# Print the input and output tensors
-print("Input Tensor:", input_tensor)
-print("Output Tensor:", output_tensor)'''
 
         

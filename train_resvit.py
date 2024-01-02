@@ -59,8 +59,8 @@ model_class = 'ResidualVisionTransformer'
 model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    #'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
+    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
@@ -72,15 +72,15 @@ training_args = {
     'train_batch_size': 128,
     'eval_batch_size': 128,
     'lr': 1e-3,
-    'num_epochs': 100,
-    'eval_every': 10,
-    'checkpoint_every': 10,
+    'num_epochs': 200,
+    'eval_every': 20,
+    'checkpoint_every': 20,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.8, 0],
-    'additional_loss_args': {'budget': 'budget_token', 'strict': True},
+    'additional_loss_weights': [0.1, 0],
+    'additional_loss_args': {'budget': 'budget_token', 'strict': False},
     'reinit_class_tokens': True,
     'wandb': False,
-    'save_images_locally': True,
+    'save_images_locally': False,
     'save_images_to_wandb': False,
     }
 
@@ -176,7 +176,7 @@ def train(run_dir, load_from=None, exp_name=None):
             running_inter += inter_reg.detach().item() * inter_weight
 
         # logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
-        logger.log({'train_loss': running_loss / len(loader), 'train_main_loss': running_main_loss / len(loader), 'train_intra': running_intra / len(loader), 'train_inter': running_inter / len(loader)})
+        logger.log({'epoch':epoch, 'train_loss': running_loss / len(loader), 'train_main_loss': running_main_loss / len(loader), 'train_intra': running_intra / len(loader), 'train_inter': running_inter / len(loader)})
 
 
     @torch.no_grad()

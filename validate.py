@@ -33,15 +33,9 @@ validation_args = {
     'num_workers': 4,
     'save_images_locally': True,
     'save_images_to_wandb': False,
-    'masks': False,
+    'plot_masks': True,
 }
 
-noise_args = {
-    'noise_type': 'token_drop',
-    'snr': None,
-    'layer': 2,
-    'prob': 0.2,
-    }
 
 @torch.no_grad()
 def validate(run_dir, load_from=None, epoch=None, budgets=None):
@@ -70,10 +64,6 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
     model = model.to(device)
     model.eval()
 
-    # add noise
-    if noise_args != {}:
-        model = add_noise(model, **noise_args)
-        
     
     accs = []
     for budget in budgets:
@@ -95,7 +85,7 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
 
         # visualize predictions
-        if validation_args['masks']:
+        if validation_args['plot_masks']:
             from visualize import img_mask_distribution
             img_mask_distribution(model, 
                         val_dataset,
@@ -127,7 +117,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    run_dir, exp_name = make_experiment_directory(BASE_PATH)
+    _, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
+    run_dir = join(args.run_dir, 'eval')
     validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=[float(b) for b in args.budgets])
     
 

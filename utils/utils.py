@@ -8,17 +8,18 @@ from models.models import build_model
 from pprint import pprint
 
 
-def make_experiment_directory(base_path):
+def make_experiment_directory(base_path, is_eval:bool=False):
     """
     Creates a new directory for an experiment based on the current date and time.
     Args:
         base_path (str): The base path where the experiment directory will be created.
+        is_eval (bool): Whether this is an evaluation experiment or not. 
     Returns:
         str: The path of the newly created experiment directory.
         str: The formatted date and time of the experiment, i.e. the experiment name.
     """
     now = datetime.now()
-    formatted_date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
+    formatted_date_time = now.strftime("%Y_%m_%d_%H_%M_%S") + '_eval' if is_eval else now.strftime("%Y_%m_%d_%H_%M_%S")
     exp_dir = join(base_path, formatted_date_time)
     os.makedirs(exp_dir, exist_ok=True)
     return exp_dir, formatted_date_time
@@ -140,8 +141,8 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
         noise_snr (float): The signal-to-noise ratio of the noise.
         prob (float): The probability of applying the noise for token dropping.
     """
-    from models.blocks import SNRNoise
-    noise_module = SNRNoise(noise_type=noise_type, std=std, snr=snr, prob=prob)
+    from models.blocks import NoiseBlock
+    noise_module = NoiseBlock(noise_type=noise_type, std=std, snr=snr, prob=prob)
     new_layers = list(model.encoder.layers)
 
     # this could be an ordered dict or a list, deal with both cases
@@ -155,7 +156,11 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
         # this is just a list
         new_layers.insert(layer, noise_module)
         model.encoder.layers = torch.nn.Sequential(*new_layers)
-    return model
+    
+    return noise_module
+
+
+
 
 
 ######################################################## Training ##################################################################

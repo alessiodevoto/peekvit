@@ -77,6 +77,12 @@ def validate_with_noise(
     if not hasattr(model, 'set_budget'):
         print('Model does not have budget, setting to None')
         budgets = [float('inf')]
+    
+    # add noise module
+    noise_module = add_noise(
+                model, 
+                noise_type=noise_type, 
+                layer=noise_layer)
 
     results_per_budget = {}
     
@@ -85,29 +91,24 @@ def validate_with_noise(
         print(f'Validating with budget {budget}')
         results_per_budget[budget] = {}
 
+        if hasattr(model, 'set_budget'):
+            model.set_budget(budget)
+            
+
         accs = []
         
         for val in noise_vals:
 
             print(f'Validating with {noise_type} noise with value {val}')
 
-            model = add_noise(
-                model, 
-                noise_type=noise_type, 
-                layer=noise_layer, 
-                prob=val if noise_type == 'token_drop' else None,
-                snr=val if noise_type == 'gaussian' else None,
-                )
-    
-        
+            noise_module.set_value(val)
             
             # compute accuracy given budget
             correct = 0
             total = 0
             for batch, labels in tqdm(val_loader, desc=f'Validating epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
-                if hasattr(model, 'set_budget'):
-                    model.set_budget(budget)
+                # print(model.current_budget)
                 out = model(batch)
                 _, predicted = torch.max(out.data, 1)
                 total += labels.size(0)
@@ -147,13 +148,14 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    run_dir, exp_name = make_experiment_directory(BASE_PATH)
+    run_dir, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
     budgets = [float(b) for b in args.budgets] if args.budgets else [None]
     probs = [float(p) for p in args.probs] if args.probs else None
     snrs = [float(s) for s in args.snrs] if args.snrs else None
 
     if probs is not None and snrs is not None:
         raise ValueError('Cannot specify both probs and snrs')
+    
     
     all_results = {}
     print(args.run_dir)
