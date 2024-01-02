@@ -33,12 +33,11 @@ validation_args = {
     'num_workers': 4,
     'save_images_locally': True,
     'save_images_to_wandb': False,
-    'plot_masks': True,
 }
 
 
 @torch.no_grad()
-def validate(run_dir, load_from=None, epoch=None, budgets=None):
+def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
 
     # logging
     if validation_args['save_images_to_wandb']:
@@ -86,11 +85,11 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
 
         # visualize predictions
-        if validation_args['plot_masks']:
+        if num_images > 0:
             from visualize import img_mask_distribution
             img_mask_distribution(model, 
                         val_dataset,
-                        torch.arange(0, 4000, 400), 
+                        torch.arange(0, 4000, 4000//num_images), 
                         model_transform = None,
                         visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
                         save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if validation_args['save_images_locally'] else None,
@@ -101,8 +100,6 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
     # log accuracy vs budget
     from visualize import plot_budget_vs_acc
-    print(accs)
-    print(budgets)
     fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
     if validation_args['save_images_to_wandb']:
         logger.log({'val_accuracy_vs_budget': fig})
@@ -112,13 +109,19 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
-    parser.add_argument('--run_dir', type=str, default=None)
+    parser.add_argument('--load_from', type=str, default=None)
     parser.add_argument('--epoch', type=str, default=None)
     parser.add_argument('--budgets', nargs='+', required=True)
+    parser.add_argument('--num_images', type=int, default=10)
 
     args = parser.parse_args()
+    store_to = join(args.load_from, 'eval')
 
-    run_dir = join(args.run_dir, 'eval')
-    validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=[float(b) for b in args.budgets])
+    validate(store_to, 
+             load_from=args.load_from, 
+             num_images=args.num_images, 
+             epoch=args.epoch, 
+             budgets=[float(b) for b in args.budgets]
+             )
     
 

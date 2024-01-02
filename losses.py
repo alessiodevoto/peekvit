@@ -232,7 +232,8 @@ class MSELoss(ResidualModelLoss):
         Returns:
             torch.Tensor: The MSE loss.
         """
-        return solo_mse(model, budget or self.budget, self.strict)
+        
+        return solo_mse(model, budget if budget is not None else self.budget, self.strict)
 
 
 class L1AndIntraEntropyLoss(ResidualModelLoss):

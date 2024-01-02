@@ -1,4 +1,6 @@
+from collections import defaultdict
 import os
+from matplotlib import cm
 import torch
 import matplotlib.pyplot as plt
 import torch
@@ -153,6 +155,55 @@ def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = N
           if save_dir is not None:
             Path(save_dir).mkdir(parents=True, exist_ok=True)
             plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
+      
+    return fig
+
+
+
+def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = None):
+    # results per budget is a dict of dicts, where the first key is the budget and 
+    # the second key is the noise value, and the value is the accuracy.
+    # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
+    # and we have a line for each noise
+
+    # create new dictionary with noise as first key and budget as second key
+
+    _results_per_noise = {}
+    for run in results_per_model:
+        _results_per_noise[run] = defaultdict(dict)
+        for budget in results_per_model[run]:   
+            for noise in results_per_model[run][budget]:
+                _results_per_noise[run][noise][budget if budget not in {0.0, float('inf')} else 1.1] = results_per_model[run][budget][noise]
+
+    print(_results_per_noise)
+
+
+    fig, ax = plt.subplots()
+
+    
+    for run, results_per_noise in _results_per_noise.items():
+        is_base_run = 'base' in run
+        for noise, results in results_per_noise.items():
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.set_xlabel('Budget')
+            ax.set_ylabel('Accuracy')
+            ax.set_title('Budget vs Accuracy across Noises')
+            # set y range
+            plt.ylim([0.1, 0.9])
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    plt.grid(visible=True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    
+    
+    
+    # create save dir if it does not exist
+    if save_dir is not None:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, f'budget_vs_acc_noises.png'))
+       
       
     return fig
 

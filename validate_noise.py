@@ -33,7 +33,6 @@ validation_args = {
     'num_workers': 4,
     'save_images_locally': True,
     'save_images_to_wandb': False,
-    'plot_masks': False,
 }
 
 
@@ -76,7 +75,7 @@ def validate_with_noise(
     # check if model has budget
     if not hasattr(model, 'set_budget'):
         print('Model does not have budget, setting to None')
-        budgets = [float('inf')]
+        budgets = [0.0]
     
     # add noise module
     noise_module = add_noise(
@@ -94,7 +93,6 @@ def validate_with_noise(
         if hasattr(model, 'set_budget'):
             model.set_budget(budget)
             
-
         accs = []
         
         for val in noise_vals:
@@ -118,20 +116,6 @@ def validate_with_noise(
             accs.append(acc)
 
             results_per_budget[budget][val] = acc
-
-            # visualize predictions
-            if validation_args['plot_masks']:
-                from visualize import img_mask_distribution
-                img_mask_distribution(model, 
-                            val_dataset,
-                            torch.arange(0, 4000, 400), 
-                            model_transform = None,
-                            visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
-                            save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}_noise_{val}' if validation_args['save_images_locally'] else None,
-                            hard=True,
-                            budget=budget,
-                            log_to_wandb=validation_args['save_images_to_wandb'],
-                            )
 
     
     return results_per_budget
@@ -173,8 +157,9 @@ if __name__ == '__main__':
     
     print(all_results)
 
-    from visualize import plot_model_budget_vs_noise_vs_acc
+    from visualize import plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc
 
     fig = plot_model_budget_vs_noise_vs_acc(all_results, save_dir=f'{run_dir}/images/' if validation_args['save_images_locally'] else None)
     
+    fig = plot_model_noise_vs_budget_vs_acc(all_results, save_dir=f'{run_dir}/images/' if validation_args['save_images_locally'] else None)
 
