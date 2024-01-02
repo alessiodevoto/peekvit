@@ -104,6 +104,61 @@ def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   
   return fig
 
+
+def plot_budget_vs_noise_vs_acc(results_per_budget: dict, save_dir: str = None):
+    # results per budget is a dict of dicts, where the first key is the budget and 
+    # the second key is the noise value, and the value is the accuracy.
+    # we want to create a plot where the x axis is the noise value, the y axis is the accuracy, 
+    # and we have a line for each budget
+
+    fig, ax = plt.subplots()
+    
+    for budget, results in results_per_budget.items():
+        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+        ax.set_xlabel('Noise')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Noise vs Accuracy across budgets')
+        ax.legend()
+        # set y range
+        plt.ylim([0.1, 0.9])
+
+        # create save dir if it does not exist
+        if save_dir is not None:
+          Path(save_dir).mkdir(parents=True, exist_ok=True)
+          plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
+    
+    return fig
+  
+
+def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = None):
+    # results per budget is a dict of dicts, where the first key is the budget and 
+    # the second key is the noise value, and the value is the accuracy.
+    # we want to create a plot where the x axis is the noise value, the y axis is the accuracy, 
+    # and we have a line for each budget
+
+    fig, ax = plt.subplots()
+
+    for model_name, results_per_budget in results_per_model.items():
+    
+      for budget, results in results_per_budget.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+          ax.set_xlabel('Noise')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Noise vs Accuracy across budgets')
+          ax.legend()
+          # set y range
+          plt.ylim([0.1, 0.9])
+
+          # create save dir if it does not exist
+          if save_dir is not None:
+            Path(save_dir).mkdir(parents=True, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
+      
+    return fig
+
+
+
+
 ######################################################## MoEs ##################################################################
 
 

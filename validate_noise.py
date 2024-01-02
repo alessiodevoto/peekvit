@@ -33,7 +33,7 @@ validation_args = {
     'num_workers': 4,
     'save_images_locally': True,
     'save_images_to_wandb': False,
-    'masks': False,
+    'plot_masks': False,
 }
 
 
@@ -73,15 +73,22 @@ def validate_with_noise(
     model = model.to(device)
     model.eval()
 
+    # check if model has budget
+    if not hasattr(model, 'set_budget'):
+        print('Model does not have budget, setting to None')
+        budgets = [float('inf')]
+
+    results_per_budget = {}
     
     for budget in budgets:
-        
+
         print(f'Validating with budget {budget}')
-        
+        results_per_budget[budget] = {}
+
         accs = []
         
         for val in noise_vals:
-        
+
             print(f'Validating with {noise_type} noise with value {val}')
 
             model = add_noise(
@@ -109,39 +116,29 @@ def validate_with_noise(
             logger.log({f'val_accuracy/budget_{budget}': acc})
             accs.append(acc)
 
+            results_per_budget[budget][val] = acc
 
             # visualize predictions
-            if validation_args['masks']:
+            if validation_args['plot_masks']:
                 from visualize import img_mask_distribution
                 img_mask_distribution(model, 
                             val_dataset,
                             torch.arange(0, 4000, 400), 
                             model_transform = None,
                             visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
-                            save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if validation_args['save_images_locally'] else None,
+                            save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}_noise_{val}' if validation_args['save_images_locally'] else None,
                             hard=True,
                             budget=budget,
                             log_to_wandb=validation_args['save_images_to_wandb'],
                             )
 
-        # log accuracy vs budget
-        from visualize import plot_noise_vs_acc
-        fig = plot_noise_vs_acc(
-            noise_vals, 
-            accs, 
-            epoch=epoch, 
-            save_dir=f'{run_dir}/images/epoch_{epoch}_budget_{budget}_noise_{val}' if validation_args['save_images_locally'] else None,
-            additional_label=f'budget_{budget}, noise_type_{noise_type}',
-            )
-        if validation_args['save_images_to_wandb']:
-            logger.log({'val_accuracy_vs_budget': fig})
-
-
+    
+    return results_per_budget
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
-    parser.add_argument('--run_dir', type=str, default=None)
+    parser.add_argument('--run_dir', nargs='+', default=None)
     parser.add_argument('--epoch', type=str, default=None)
     parser.add_argument('--budgets', nargs='*', default=None)
     parser.add_argument('--probs', nargs='*', default=None)
@@ -158,16 +155,24 @@ if __name__ == '__main__':
     if probs is not None and snrs is not None:
         raise ValueError('Cannot specify both probs and snrs')
     
+    all_results = {}
+    print(args.run_dir)
+    for load_from in args.run_dir:
+        run_results = validate_with_noise(
+                        run_dir, 
+                        load_from=load_from, 
+                        epoch=args.epoch, 
+                        noise_layer=args.noise_layer,
+                        budgets=budgets,
+                        noise_type= 'gaussian' if args.snrs else 'token_drop',
+                        noise_vals=snrs if args.snrs else probs,
+                        )
+        all_results[load_from] = run_results
     
+    print(all_results)
 
-    validate_with_noise(
-        run_dir, 
-        load_from=args.run_dir, 
-        epoch=args.epoch, 
-        noise_layer=args.noise_layer,
-        budgets=budgets,
-        noise_type= 'gaussian' if args.snrs else 'token_drop',
-        noise_vals=snrs if args.snrs else probs,
-        )
+    from visualize import plot_model_budget_vs_noise_vs_acc
+
+    fig = plot_model_budget_vs_noise_vs_acc(all_results, save_dir=f'{run_dir}/images/' if validation_args['save_images_locally'] else None)
     
 

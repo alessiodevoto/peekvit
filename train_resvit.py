@@ -76,8 +76,8 @@ training_args = {
     'eval_every': 10,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [1, 0],
-    'additional_loss_args': {'budget': 'budget_token', 'strict': False},
+    'additional_loss_weights': [0.8, 0],
+    'additional_loss_args': {'budget': 'budget_token', 'strict': True},
     'reinit_class_tokens': True,
     'wandb': False,
     'save_images_locally': True,
@@ -126,6 +126,7 @@ def train(run_dir, load_from=None, exp_name=None):
         logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args, wandb_run=exp_name, wandb_run_dir=run_dir)
     else:
         logger = SimpleLogger(join(run_dir, 'logs.txt'))
+        logger.log({'model_class': model_class, 'model_args': model_args, 'gate_args': gate_args, 'noise_args': noise_args, 'training_args': training_args})
     
     # adjust model
     if training_args['reinit_class_tokens']:
