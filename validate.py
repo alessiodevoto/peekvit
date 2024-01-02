@@ -42,7 +42,7 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
 
     # logging
     if validation_args['save_images_to_wandb']:
-        logger = WandbLogger(wandb_run=exp_name, wandb_run_dir=run_dir)
+        logger = WandbLogger(wandb_run_dir=run_dir)
     else:
         # create run directory and logger 
         logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
@@ -61,6 +61,7 @@ def validate(run_dir, load_from=None, epoch=None, budgets=None):
     logger.log(f'Loading model from {load_from}')
     
     model, _, epoch, model_args, _ = load_state(load_from, model=None, optimizer=None)
+    logger.log({'model_args': model_args})
     model = model.to(device)
     model.eval()
 
@@ -117,7 +118,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    _, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
     run_dir = join(args.run_dir, 'eval')
     validate(run_dir, load_from=args.run_dir, epoch=args.epoch, budgets=[float(b) for b in args.budgets])
     
