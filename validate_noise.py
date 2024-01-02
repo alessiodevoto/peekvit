@@ -142,7 +142,7 @@ if __name__ == '__main__':
     
     
     all_results = {}
-    print(args.run_dir)
+    
     for load_from in args.run_dir:
         run_results = validate_with_noise(
                         run_dir, 

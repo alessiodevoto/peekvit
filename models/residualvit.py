@@ -503,8 +503,8 @@ class ResidualVisionTransformer(nn.Module):
                     self.current_budget = torch.rand(1, device=x.device).item()
                 elif self.budget == 'learnable':
                     # in this case we use two learnable parameters and interpolate between them with a random budget
-                    # self.current_budget = torch.rand(1, device=x.device).item()
-                    self.current_budget = torch.rand(n, device=x.device)[:, None, None]
+                    self.current_budget = torch.rand(1, device=x.device).item()
+                    # self.current_budget = torch.rand(n, device=x.device)[:, None, None]
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     # print(x.shape, self.current_budget.shape, batch_budget_token_1.shape)
                     # batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
