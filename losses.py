@@ -112,7 +112,9 @@ def solo_mse(model, budget: float = 0.65, strict: bool = False, **kwargs):
     sparsity_loss = []
     for _, mask in masks.items():
         sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
-        sparsity_loss.append(torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2))
+        sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
+        sparsity_loss.append(sparsity)
+        # sparsity_loss.append(sparsity + (1-budget) / 1e1) # TODO added this correction term here 
     
     sparsity_loss = torch.stack(sparsity_loss)
 

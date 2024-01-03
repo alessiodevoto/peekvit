@@ -18,7 +18,7 @@ class ResidualModule(ABC, nn.Module):
 
 
 class ResidualGate(nn.Module):
-    def __init__(self, hidden_dim, threshold:Union[float, str] = 0.5, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10):
+    def __init__(self, hidden_dim, threshold:Union[float, str] = 0.5, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10.0):
         super().__init__()
         self.projection = nn.Linear(hidden_dim, 1)
         self.temp = temp
@@ -89,6 +89,7 @@ class ResidualViTBlock(ResidualModule):
         num_registers: int = 0,
         skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
+        gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
         budget_token: Union[bool, List, Literal['learnable']] = False,
     ):
@@ -105,7 +106,7 @@ class ResidualViTBlock(ResidualModule):
         if skip in {'attention', 'mlp', 'attention+mlp'}:
             self.temp = temp
             self.add_input = add_input
-            self.residual_gate = ResidualGate(hidden_dim, threshold=gate_threshold, temp=temp, gate_type=gate_type)
+            self.residual_gate = ResidualGate(hidden_dim, threshold=gate_threshold, temp=temp, gate_type=gate_type, sigmoid_bias=gate_bias)
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim, eps=1e-06)
@@ -272,6 +273,7 @@ class ResidualViTEncoder(nn.Module):
         num_registers: int = 0,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
+        gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
         budget_token: Union[bool, List, Literal['learnable']] = False,
 
@@ -302,6 +304,7 @@ class ResidualViTEncoder(nn.Module):
                             num_registers=num_registers,
                             gate_type=gate_type,
                             temp=gate_temp,
+                            gate_bias=gate_bias,
                             gate_threshold=gate_threshold,
                             budget_token=budget_token
                             ))
@@ -375,6 +378,7 @@ class ResidualVisionTransformer(nn.Module):
         num_class_tokens: int = 1,
         gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
         gate_temp: float = 1.0,
+        gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
         add_budget_token: Union[bool, List, Literal['learnable']] = False,
     ):
@@ -392,6 +396,8 @@ class ResidualVisionTransformer(nn.Module):
         self.num_class_tokens = num_class_tokens
         self.budget = add_budget_token
         self.current_budget = None
+        self.gate_temp = gate_temp 
+        self.gate_bias = gate_bias
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or [None] * num_layers
@@ -424,6 +430,7 @@ class ResidualVisionTransformer(nn.Module):
             add_input=add_input,
             gate_type=gate_type, 
             gate_temp=gate_temp,
+            gate_bias=gate_bias,
             gate_threshold=gate_threshold,
             budget_token=add_budget_token,
             )
