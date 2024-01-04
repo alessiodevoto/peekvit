@@ -67,6 +67,7 @@ def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
 
   # set y range
   plt.ylim([0.4, 0.9])
+  plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
 
   # create save dir if it does not exist
   if save_dir is not None:

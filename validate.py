@@ -108,7 +108,7 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='A simple program with two arguments.')
+    parser = argparse.ArgumentParser()
     parser.add_argument('--load_from', type=str, default=None)
     parser.add_argument('--epoch', type=str, default=None)
     parser.add_argument('--budgets', nargs='+', required=True)
