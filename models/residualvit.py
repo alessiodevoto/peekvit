@@ -209,6 +209,7 @@ class ResidualViTBlock(ResidualModule):
 
         # residual gating, here we learn a scalar for each token
         self.mask = self.residual_gate(img_tokens, budget=current_budget, threshold=threshold)
+        # add ones for special tokens
         masked_tokens = self.mask * img_tokens 
         
 
@@ -230,12 +231,14 @@ class ResidualViTBlock(ResidualModule):
 
 
     def plain_forward(self, input: torch.Tensor):
-        x = self.ln_1(input)
-        x = self.self_attention(x)
+        expanded_mask = torch.cat([torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), self.mask, torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
+        x = expanded_mask * self.ln_1(input) 
+        
+        x = expanded_mask * self.self_attention(x)
         x = self.dropout(x)
         x = x + input
 
-        y = self.ln_2(x)
+        y = expanded_mask * self.ln_2(x)
         y = self.mlp(y)
         return x + y
 
@@ -560,8 +563,7 @@ class ResidualVisionTransformer(nn.Module):
         # Add budget token
         if self.budget:
             x = self._add_budget_token(x)
-
-
+        
         # Pass through the encoder
         x = self.encoder(x)
 

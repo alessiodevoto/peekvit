@@ -91,7 +91,7 @@ class SelfAttention(nn.Module):
         self.self_attention = nn.MultiheadAttention(input_dim, num_heads, batch_first=True, dropout=dropout)
 
     def forward(self, x):
-        out, weights = self.self_attention(query=x, key=x, value=x, need_weights=True)
+        out, weights = self.self_attention(x, x, x, need_weights=True)
         return out
 
 

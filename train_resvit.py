@@ -59,13 +59,13 @@ model_class = 'ResidualVisionTransformer'
 model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    #'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
+    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': -0.5,
+    'gate_bias': 10,
     'add_budget_token': 'learnable' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
@@ -77,7 +77,7 @@ training_args = {
     'eval_every': 10,
     'checkpoint_every': 20,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.05, 0],
+    'additional_loss_weights': [0.1, 0],
     'additional_loss_args': {'budget': 'budget_token', 'strict': True},
     'reinit_class_tokens': True,
     'wandb': False,
@@ -233,7 +233,6 @@ def train(run_dir, load_from=None, exp_name=None):
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, model_args, None, optimizer, epoch)
      
-
 
 
 
