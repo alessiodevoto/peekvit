@@ -65,7 +65,7 @@ gate_args = {
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': 10,
+    'gate_bias': 0,
     'add_budget_token': 'learnable' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
@@ -75,10 +75,10 @@ training_args = {
     'lr': 1e-3,
     'num_epochs': 200,
     'eval_every': 10,
-    'checkpoint_every': 20,
+    'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
     'additional_loss_weights': [0.1, 0],
-    'additional_loss_args': {'budget': 'budget_token', 'strict': True},
+    'additional_loss_args': {'budget': 'budget_token', 'strict': False},
     'reinit_class_tokens': True,
     'wandb': False,
     'save_images_locally': True,

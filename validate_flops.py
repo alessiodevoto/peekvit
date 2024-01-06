@@ -32,7 +32,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 validation_args = {
     'eval_batch_size': 64, # this must 1 for counting flops
     'num_workers': 4,
-    'x_axis': 'flops', # 'budget' or 'flops'
     'save_images_locally': True,
     'save_images_to_wandb': False,
 }
@@ -106,14 +105,14 @@ def validate_flops(run_dir, load_from=None, epoch=None, budgets=None):
                 avg_sparsity += module.avg_sparsity 
                 module.avg_sparsity = 0
         logger.log('Average sparsity: ' + str(avg_sparsity / len(list(model.named_modules()))))
-
+    
     logger.log({'flops': flops})
     # log accuracy vs budget
     from visualize import plot_budget_vs_acc
-    x_axis = budgets if validation_args['x_axis'] == 'budget' else flops
-    fig = plot_budget_vs_acc(x_axis, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_{validation_args["x_axis"]}' if validation_args['save_images_locally'] else None)
+    fig_budget = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
+    fig_flops = plot_budget_vs_acc(flops, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_flops' if validation_args['save_images_locally'] else None)
     if validation_args['save_images_to_wandb']:
-        logger.log({f'val_accuracy_vs_{validation_args["x_axis"]}': fig})
+        logger.log({'val_accuracy_vs_flops': fig_flops, 'val_accuracy_vs_budget': fig_budget})
 
 
 

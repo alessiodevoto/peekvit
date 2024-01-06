@@ -231,7 +231,10 @@ class ResidualViTBlock(ResidualModule):
 
 
     def plain_forward(self, input: torch.Tensor):
-        expanded_mask = torch.cat([torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), self.mask, torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
+        if self.skip == 'attention+mlp':
+            expanded_mask = torch.cat([torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), self.mask, torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
+        else:
+            expanded_mask = torch.tensor(1.0, device=input.device)
         x = expanded_mask * self.ln_1(input) 
         
         x = expanded_mask * self.self_attention(x)
@@ -514,36 +517,48 @@ class ResidualVisionTransformer(nn.Module):
                 elif self.budget == 'learnable':
                     # in this case we use two learnable parameters and interpolate between them with a random budget
                     self.current_budget = torch.rand(1, device=x.device).item()
-                    # self.current_budget = torch.rand(n, device=x.device)[:, None, None]
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
-                    # print(x.shape, self.current_budget.shape, batch_budget_token_1.shape)
-                    # batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    '''x = torch.cat([ x,
-                                    self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)'''
                     x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
+                    return x
+                elif self.budget == 'learnable_interpolate':
+                    # in this case we use two learnable parameters and interpolate between them with a random budget
+                    self.current_budget = torch.rand(1, device=x.device).item()
+                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
+                    batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
+                    x = torch.cat([ x,
+                                    self.current_budget * batch_budget_token_1 +
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
                     return x
                     
                 
                 budget_token = budget_token.fill_(self.current_budget)
                 self.current_budget = budget_token.mean().item()
                 x = torch.cat([x, budget_token], dim=1)
+                return x
+            
             else:
                 if not getattr(self, 'current_budget', False):
                     raise ValueError('Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.')
                 
                 if self.budget == 'learnable':
+                    # in this case we use two learnable parameters and interpolate between them with a random budget
+                    self.current_budget = torch.rand(1, device=x.device).item()
+                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
+                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
+                    
+                elif self.budget == 'learnable_interpolate':
+                    # in this case we use two learnable parameters and interpolate between them with a random budget
+                    self.current_budget = torch.rand(1, device=x.device).item()
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    '''x = torch.cat([ x,
+                    x = torch.cat([ x,
                                     self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)'''
-                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
+                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
+                    
                 else:
                     budget_token = budget_token.fill_(self.current_budget)
                     self.current_budget = budget_token.mean().item()
                     x = torch.cat([x, budget_token], dim=1)
-            
             return x
 
     def forward(self, x: torch.Tensor):

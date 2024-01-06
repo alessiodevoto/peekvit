@@ -1,4 +1,7 @@
+from collections import defaultdict
 import os, sys
+
+from utils.flops_count import compute_flops
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
@@ -50,7 +53,7 @@ def validate_with_noise(
 
     # logging
     if validation_args['save_images_to_wandb']:
-        logger = WandbLogger(wandb_run=exp_name, wandb_run_dir=run_dir)
+        logger = WandbLogger(wandb_run_dir=run_dir)
     else:
         # create run directory and logger 
         logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
@@ -62,7 +65,7 @@ def validate_with_noise(
     val_loader = DataLoader(val_dataset, batch_size=validation_args['eval_batch_size'], shuffle=False, num_workers=4, pin_memory=True)
 
     
-    # get last checkpoint in the load_from directory
+    # get checkpoint and load model
     load_from = join(load_from, 'checkpoints')
     last_checkpoint = f'epoch_{epoch}.pth' if epoch else sorted(os.listdir(load_from))[-1]
     load_from = join(load_from, last_checkpoint)
@@ -72,7 +75,7 @@ def validate_with_noise(
     model = model.to(device)
     model.eval()
 
-    # check if model has budget
+    # sanity check that model has budget
     if not hasattr(model, 'set_budget'):
         print('Model does not have budget, setting to None')
         budgets = [0.0]
@@ -83,7 +86,10 @@ def validate_with_noise(
                 noise_type=noise_type, 
                 layer=noise_layer)
 
-    results_per_budget = {}
+    # validate
+    # this will be a dict of dicts. {budget : {noise_value : accuracy}}
+    results_per_budget = defaultdict(dict)
+    results_per_flops = defaultdict(dict)
     
     for budget in budgets:
 
@@ -115,15 +121,34 @@ def validate_with_noise(
             logger.log({f'val_accuracy/budget_{budget}': acc})
             accs.append(acc)
 
-            results_per_budget[budget][val] = acc
+            avg_flops = 0
+            for batch, labels in tqdm(val_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
+                batch, labels = batch.to(device), labels.to(device)
+                if hasattr(model, 'set_budget'):
+                    model.set_budget(budget)
+                num_flops, num_params = compute_flops(
+                    model, 
+                    batch,
+                    as_strings=False,
+                    verbose=False,
+                    print_per_layer_stat=False,
+                    flops_units='Mac'
+                    )
+                avg_flops += num_flops
+            avg_flops /= len(val_loader)
+            
 
+            results_per_budget[budget][val] = acc
+            results_per_flops[avg_flops][val] = acc
+
+    logger.log({'flops': results_per_flops, 'budget': results_per_budget})
     
-    return results_per_budget
+    return results_per_budget, results_per_flops
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
-    parser.add_argument('--run_dir', nargs='+', default=None)
+    parser.add_argument('--load_from', nargs='+', default=None)
     parser.add_argument('--epoch', type=str, default=None)
     parser.add_argument('--budgets', nargs='*', default=None)
     parser.add_argument('--probs', nargs='*', default=None)
@@ -132,7 +157,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    run_dir, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
+    # store_to, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
+    store_to = join(args.load_from[0], 'eval_noise')
     budgets = [float(b) for b in args.budgets] if args.budgets else [None]
     probs = [float(p) for p in args.probs] if args.probs else None
     snrs = [float(s) for s in args.snrs] if args.snrs else None
@@ -141,11 +167,12 @@ if __name__ == '__main__':
         raise ValueError('Cannot specify both probs and snrs')
     
     
-    all_results = {}
-    
-    for load_from in args.run_dir:
-        run_results = validate_with_noise(
-                        run_dir, 
+    all_results_per_budget = {}
+    all_results_per_flops = {}
+
+    for load_from in args.load_from:
+        budget_results, flops_results = validate_with_noise(
+                        store_to, 
                         load_from=load_from, 
                         epoch=args.epoch, 
                         noise_layer=args.noise_layer,
@@ -153,13 +180,13 @@ if __name__ == '__main__':
                         noise_type= 'gaussian' if args.snrs else 'token_drop',
                         noise_vals=snrs if args.snrs else probs,
                         )
-        all_results[load_from] = run_results
+        all_results_per_budget[load_from] = budget_results
+        all_results_per_flops[load_from] = flops_results
     
-    print(all_results)
-
+    
     from visualize import plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc
 
-    fig = plot_model_budget_vs_noise_vs_acc(all_results, save_dir=f'{run_dir}/images/' if validation_args['save_images_locally'] else None)
+    fig = plot_model_budget_vs_noise_vs_acc(all_results_per_budget, save_dir=f'{store_to}/images/' if validation_args['save_images_locally'] else None)
     
-    fig = plot_model_noise_vs_budget_vs_acc(all_results, save_dir=f'{run_dir}/images/' if validation_args['save_images_locally'] else None)
+    fig = plot_model_noise_vs_budget_vs_acc(all_results_per_flops, additional_x_labels=budgets, save_dir=f'{store_to}/images/' if validation_args['save_images_locally'] else None)
 

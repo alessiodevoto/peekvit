@@ -161,7 +161,7 @@ def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = N
 
 
 
-def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = None):
+def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = None, additional_x_labels: List = None):
     # results per budget is a dict of dicts, where the first key is the budget and 
     # the second key is the noise value, and the value is the accuracy.
     # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
@@ -180,22 +180,26 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
 
 
     fig, ax = plt.subplots()
-
     
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
             ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
-            ax.set_xlabel('Budget')
+            ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
             # set y range
             plt.ylim([0.1, 0.9])
 
+            
+            #x_ticks = [f'{x}({y})' for x,y in zip(results.keys(), additional_x_labels)] if additional_x_labels is not None else results.keys()
+    
+
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 1.0), loc='upper left')
     plt.grid(visible=True, linestyle='--', alpha=0.5)
+
     plt.tight_layout()
     
     
