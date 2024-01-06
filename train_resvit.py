@@ -6,6 +6,7 @@ import torch
 from tqdm import tqdm
 from os.path import join
 import argparse
+import random
 
 
 
@@ -59,14 +60,14 @@ model_class = 'ResidualVisionTransformer'
 model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
+    #'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': 0,
-    'add_budget_token': 'learnable' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
+    'gate_bias': 5,
+    'add_budget_token':  'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
 training_args = {
@@ -77,22 +78,24 @@ training_args = {
     'eval_every': 10,
     'checkpoint_every': 10,
     'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.1, 0],
-    'additional_loss_args': {'budget': 'budget_token', 'strict': False},
+    'additional_loss_weights': [0.5, 0],
+    'additional_loss_args': {'budget': 'budget_token', 'strict': True},
     'reinit_class_tokens': True,
     'wandb': False,
     'save_images_locally': True,
     'save_images_to_wandb': False,
     }
 
-"""noise_args = {
+noise_args = {
     'layer': 2,
-    'noise_type': 'gaussian',
-    'snr': 200,
-}"""
+    'noise_type': 'token_drop',
+    'snr': None,
+    'prob': None,
+    'std': None,
+    'noise_range': [0.0, 0.1, 0.2, 0.3],
+}
 
-noise_args = {}
-
+# noise_args = {}
 
 
 VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.85]
@@ -134,9 +137,12 @@ def train(run_dir, load_from=None, exp_name=None):
         model = reinit_class_tokens(model)
     
     # add noise
+    noise_block = None
     if noise_args != {}:
-        model = add_noise(model, **noise_args)
-        print(model)
+        noise_range = noise_args.pop('noise_range')
+        noise_block = add_noise(model, **noise_args)
+        
+        
     
 
     # training 
@@ -161,6 +167,12 @@ def train(run_dir, load_from=None, exp_name=None):
         model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
         running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
+            # set noise
+            if noise_block is not None:
+                noise_block.set_value(random.uniform(*noise_range) if len(noise_range) == 2 else random.choice(noise_range))
+                
+
+            # forward pass
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
             out = model(batch)
@@ -184,6 +196,9 @@ def train(run_dir, load_from=None, exp_name=None):
     def validate_epoch(model, loader, budgets=None, epoch=None):
         model.eval()
         
+        if noise_block is not None:
+            noise_block.set_value(0.0)
+
         accs = []
         for budget in budgets:
             
@@ -231,7 +246,7 @@ def train(run_dir, load_from=None, exp_name=None):
             validate_epoch(model, val_loader, VALIDATE_BUDGETS, epoch=epoch)
             
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
-            save_state(checkpoints_dir, model, model_args, None, optimizer, epoch)
+            save_state(checkpoints_dir, model, model_args, noise_args, optimizer, epoch)
      
 
 

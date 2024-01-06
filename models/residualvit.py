@@ -361,9 +361,11 @@ class ResidualVisionTransformer(nn.Module):
         gate_type (Literal['gumbel', 'sigmoid'], optional): The type of gate for residual layers. Defaults to 'gumbel'.
         gate_temp (float, optional): The temperature for the gate. Defaults to 1.0.
         gate_threshold (float, optional): The threshold for the gate. CDefaults to 0.5.
-        add_budget_token (bool, optional): Whether to add a budget token at the end of each sequence. It can be True to sample
-            a budget token in [0,1], a tuple-like to specify a set of budgets to sample from, or a float to have a fixed budget 
-            across training. For now, the same budget is sampled for each batch. Defaults to False.
+        add_budget_token (bool, str, optional): Whether to add a budget token at the end of each sequence. It can be True to sample
+            a budget token in [0,1], a tuple-like to specify a set of budgets to sample from, a float to have a fixed budget 
+            across training, 'learnable' to add a learnable budget token and sample a value between 0 and 1 to multiply to it, and 
+            learnable interpolate to have 2 trainable budget tokens and sample a value (budget) to interpolate between them.  
+            For now, the same budget is sampled for each batch. Defaults to False.
     """
 
     def __init__(
@@ -386,7 +388,7 @@ class ResidualVisionTransformer(nn.Module):
         gate_temp: float = 1.0,
         gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
-        add_budget_token: Union[bool, List, Literal['learnable']] = False,
+        add_budget_token: Union[bool, List, Literal['learnable', 'learnable_interpolate']] = False,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -447,7 +449,7 @@ class ResidualVisionTransformer(nn.Module):
             seq_length += 1
             self.num_budget_tokens = 1
         
-        if self.budget == 'learnable':
+        if self.budget == 'learnable' or self.budget == 'learnable_interpolate':
             self.learnable_budget_token_1 = nn.Parameter(torch.randn(1, 1, hidden_dim))
             self.learnable_budget_token_2 = nn.Parameter(torch.randn(1, 1, hidden_dim))
             
@@ -593,7 +595,6 @@ class ResidualVisionTransformer(nn.Module):
         return x
 
 
-    
     def set_budget(self, budget: float):
         self.current_budget = budget
 
