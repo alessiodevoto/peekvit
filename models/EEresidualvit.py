@@ -6,258 +6,12 @@ from typing import Optional, List, Union, Literal
 from abc import ABC
 from einops import reduce
 
-from .blocks import SelfAttention, MLP, GumbelSigmoid, SigmoidWithTemp
+from .residualvit import ResidualViTBlock
 
 """
 A Vision Transformer with Residual Gating which can be placed at any layer.
 The residual gating is implemented as a learnable vector for each token.
 """
-
-class ResidualModule(ABC, nn.Module):
-  pass
-
-
-class ResidualGate(nn.Module):
-    def __init__(self, hidden_dim, threshold:Union[float, str] = 0.5, temp=1.0, gate_type='gumbel', sigmoid_bias:float = 10.0):
-        super().__init__()
-        self.projection = nn.Linear(hidden_dim, 1)
-        self.temp = temp
-        self.gate_type = gate_type
-        self.sigmoid_bias = sigmoid_bias
-
-        if gate_type == 'gumbel':
-            self.gate = GumbelSigmoid(hard=True)
-        elif gate_type == 'sigmoid':
-            self.gate = SigmoidWithTemp(temp=temp, bias=sigmoid_bias)
-        else:
-            raise ValueError(f'Unknown gate type {gate_type}')
-        
-        if gate_type == 'gumbel' and threshold != 0.5:
-            raise ValueError(f'Gumbel gate cannot have a threshold different from 0.5')
-        
-
-        # threshold is a scalar learnable parameter
-        if isinstance(threshold, float):
-            self.threshold = threshold
-        elif threshold == 'learnable':
-            self.threshold = nn.Parameter(torch.tensor(0.5))
-
-
-    def forward(self, x, budget=None, threshold=None):
-
-        # x is (batch_size, seq_length, hidden_dim)
-        mask_log = self.projection(x) / self.temp
-        mask = self.gate(mask_log)
-        
-        
-        """if budget is not None:
-            # budget is a scalar value
-            mask = mask * budget"""
-        
-        if self.gate_type == 'sigmoid':
-            if budget is not None:
-                mask = F.relu(mask - (1-budget)) 
-            elif threshold is not None:
-                mask = F.relu(mask - threshold)
-                self.threshold = threshold
-            else:
-                mask = F.relu(mask - self.threshold)
-        else:
-            assert budget is None, 'Gumbel gate does not support budget'
-            
-
-        return mask
-
-
-
-
-
-# ViT Block
-class ResidualViTBlock(ResidualModule):
-    """Transformer encoder block."""
-
-    def __init__(
-        self,
-        num_heads: int,
-        hidden_dim: int,
-        mlp_dim: int,
-        dropout: float,
-        attention_dropout: float,
-        temp: float = 1.0,
-        add_input: bool = False,
-        num_class_tokens: int = 1,
-        num_registers: int = 0,
-        skip : Literal['attention', 'mlp', 'attention+mlp', 'none'] = None,
-        gate_type: Literal['gumbel', 'sigmoid'] = 'gumbel',
-        gate_bias: float = 10.0,
-        gate_threshold: float = 0.5,
-        budget_token: Union[bool, List, Literal['learnable']] = False,
-    ):
-        super().__init__()
-        self.num_heads = num_heads
-        self.hidden_dim = hidden_dim
-        self.mlp_dim = mlp_dim
-        self.budget_token = budget_token 
-        self.num_special_tokens = num_class_tokens + num_registers
-
-        # residual settings
-        self.gate_type = gate_type
-        self.skip = skip
-        if skip in {'attention', 'mlp', 'attention+mlp'}:
-            self.temp = temp
-            self.add_input = add_input
-            self.residual_gate = ResidualGate(hidden_dim, threshold=gate_threshold, temp=temp, gate_type=gate_type, sigmoid_bias=gate_bias)
-
-        # Attention block
-        self.ln_1 = nn.LayerNorm(hidden_dim, eps=1e-06)
-        self.self_attention = SelfAttention(hidden_dim, num_heads, dropout=attention_dropout)
-        self.dropout = nn.Dropout(dropout)
-
-        # MLP block
-        self.ln_2 = nn.LayerNorm(hidden_dim, eps=1e-06)
-        self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
-
-        # budget learner
-        if self.budget_token == 'learnable':
-            self.budget_token_gate = nn.Linear(hidden_dim, 1)
-
-
-    def forward_skip_attention(self, input: torch.Tensor):
-        # we should mask only non special tokens
-        special_tokens = input[:, :self.num_special_tokens, :]
-        img_tokens = input[:, self.num_special_tokens:, :]
-
-        if self.budget_token:
-            # budget token is the last token
-            budget_token = img_tokens[:, -1:, :] 
-            img_tokens = img_tokens[:, :-1, :]
-
-
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens, budget=budget_token.mean() if self.budget_token else None) 
-        masked_tokens = self.mask * img_tokens 
-
-        # concatenate special tokens and masked input
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-
-        x = self.ln_1(masked_input)
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-
-        y = self.ln_2(x)
-        y = self.mlp(y)
-
-        return y 
-
-
-    def forward_skip_mlp(self, input: torch.Tensor):
-
-        x = self.ln_1(input)
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-        
-        # we should mask only non special tokens
-        special_tokens = x[:, :self.num_special_tokens, :]
-        img_tokens = x[:, self.num_special_tokens:, :]
-
-        if self.budget_token:
-            # budget token is the last token
-            budget_token = img_tokens[:, -1:, :] 
-            img_tokens = img_tokens[:, :-1, :]
-
-        # residual gating, here we learn a scalar for each token
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens, budget=budget_token.mean() if self.budget_token else None) 
-        masked_tokens = self.mask * img_tokens 
-
-        # concatenate special tokens and masked input
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-
-        if self.budget_token:
-            masked_input = torch.cat([masked_input, budget_token], dim=1)
-
-        y = self.ln_2(masked_input)
-        y = self.mlp(y)
-
-        if self.add_input:
-            # only img_tokens should be added to the output
-            unmasked_tokens = img_tokens * (1-self.mask)
-            y = y + torch.cat([torch.zeros_like(special_tokens), unmasked_tokens], dim=1)
-        
-        return y
-
-
-    def forward_skip_attention_mlp(self, input: torch.Tensor):
-        
-        # we should mask only non special tokens
-        special_tokens = input[:, :self.num_special_tokens, :]
-        img_tokens = input[:, self.num_special_tokens:, :]
-
-        current_budget, threshold = None, None
-        if self.budget_token:
-            # budget token is the last token
-            budget_token = img_tokens[:, -1:, :] 
-            img_tokens = img_tokens[:, :-1, :]
-            current_budget = budget_token.mean()
-        
-        if self.budget_token == 'learnable':
-            threshold = torch.sigmoid(self.budget_token_gate(budget_token))
-            current_budget = None
-
-
-        # residual gating, here we learn a scalar for each token
-        self.mask = self.residual_gate(img_tokens, budget=current_budget, threshold=threshold)
-        # add ones for special tokens
-        masked_tokens = self.mask * img_tokens 
-        
-
-        # concatenate special tokens, masked input and budget token
-        masked_input = torch.cat([special_tokens, masked_tokens], dim=1)
-
-        if self.budget_token:
-            masked_input = torch.cat([masked_input, budget_token], dim=1)
-
-        # plain forward
-        y = self.plain_forward(masked_input)
-
-        if self.add_input:
-            # only img_tokens should be added to the output
-            unmasked_tokens = img_tokens * (1-self.mask)
-            y = y + torch.cat([torch.zeros_like(special_tokens), unmasked_tokens], dim=1)
-
-        return y
-
-
-    def plain_forward(self, input: torch.Tensor):
-        if self.skip == 'attention+mlp':
-            expanded_mask = torch.cat([torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), self.mask, torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
-        else:
-            expanded_mask = torch.tensor(1.0, device=input.device)
-        x = expanded_mask * self.ln_1(input) 
-        
-        x = expanded_mask * self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-
-        y = expanded_mask * self.ln_2(x)
-        y = self.mlp(y)
-        return x + y
-
-
-    def forward(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-
-        if self.skip == 'attention':
-            return self.forward_skip_attention(input)
-        elif self.skip == 'mlp':
-            return self.forward_skip_mlp(input)
-        elif self.skip == 'attention+mlp':
-            return self.forward_skip_attention_mlp(input)
-        else:
-            return self.plain_forward(input)
-
 
 
 # ViT Encoder
@@ -319,7 +73,7 @@ class EEResidualViTEncoder(nn.Module):
 
         self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
-        self.early_exits = nn.ModuleList([
+        self.early_exit_heads = nn.ModuleList([
             nn.Sequential(nn.LayerNorm(hidden_dim), nn.Linear(hidden_dim, self.num_classes)) for _ in range(num_layers)])
 
     def forward(self, input: torch.Tensor):
@@ -338,7 +92,7 @@ class EEResidualViTEncoder(nn.Module):
         early_exits = []
         for i in range(self.num_layers):
             input = self.layers[i](input)
-            early_exits.append(self.early_exits[i](input[:, 0:self.num_class_tokens]))
+            early_exits.append(self.early_exit_heads[i](input[:, 0:self.num_class_tokens]).squeeze())
         
         return self.ln(input), early_exits
 
@@ -602,8 +356,8 @@ class EEResidualVisionTransformer(nn.Module):
 
         # Classification head
         x = self.head(x)
-
-        return x, early_exits
+        outs = early_exits + [x]    
+        return outs
 
 
     def set_budget(self, budget: float):

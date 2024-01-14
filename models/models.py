@@ -1,6 +1,7 @@
 from .moevit import VisionTransformerMoE
 from .residualvit import ResidualVisionTransformer  
 from .vit import VisionTransformer
+from .EEresidualvit import EEResidualVisionTransformer
 from torchvision.models import VisionTransformer as TorchVisionTransformer
 
 MODELS_MAP = {
@@ -18,7 +19,11 @@ MODELS_MAP = {
 
     'torchvisiontransformer': TorchVisionTransformer,
     'TorchVisionTransformer': TorchVisionTransformer,
-    'torchvit': TorchVisionTransformer
+    'torchvit': TorchVisionTransformer,
+
+    'EEresidualvisiontransformer': EEResidualVisionTransformer,
+    'eeResidualVisionTransformer': EEResidualVisionTransformer,
+    'eeResidualvit': EEResidualVisionTransformer,
 }
 
 

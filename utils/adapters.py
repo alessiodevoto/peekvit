@@ -1,6 +1,7 @@
 from torchvision.models import VisionTransformer as TorchVisionTransformer
 from torchvision.models.vision_transformer import EncoderBlock as TorchEncoderBlock
-from models.residualvit import ResidualVisionTransformer, ResidualViTBlock
+from models.residualvit import ResidualVisionTransformer
+from models.EEresidualvit import EEResidualVisionTransformer
 from models.vit import VisionTransformer
 import torch
 
@@ -119,6 +120,39 @@ def from_vit_to_residual_vit(vit_checkpoint, residual_vit_args:dict = None):
 
     # build residual vit, with randomly init weights
     residual_vit = ResidualVisionTransformer(**model_args, **residual_vit_args)
+
+    # copy weights from vit to residual vit
+    res = residual_vit.load_state_dict(vit_weights, strict=False)
+
+    print('Some parameters are not present in the checkpoint and will be randomly initialized: ', res[0])
+
+    model_args.update(residual_vit_args)
+        
+    return residual_vit, model_args
+
+
+@torch.no_grad()
+def from_vit_to_eeresidual_vit(vit_checkpoint, residual_vit_args:dict = None):
+    """
+    Converts a Vision Transformer (ViT) checkpoint to a Residual Vision Transformer (ResidualViT) model.
+
+    Args:
+        vit_checkpoint (str): Path to the ViT checkpoint file.
+        residual_vit_args (dict, optional): Additional arguments to initialize the ResidualViT model. Defaults to None.
+
+    Returns:
+        ResidualViT: The converted ResidualViT model.
+        Args: The Resvit model arguments.
+    """
+    
+    # load weights from vit checkpoint
+    state = torch.load(vit_checkpoint)
+    print('Loading weights from class: ', state['model_class'])
+    vit_weights = state['state_dict']
+    model_args = state['model_args']
+
+    # build residual vit, with randomly init weights
+    residual_vit = EEResidualVisionTransformer(**model_args, **residual_vit_args)
 
     # copy weights from vit to residual vit
     res = residual_vit.load_state_dict(vit_weights, strict=False)

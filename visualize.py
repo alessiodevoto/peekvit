@@ -425,8 +425,11 @@ def img_mask_distribution(
       cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
 
       # set title to predicted and ground truth class
-      title = f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}'
-      axs[0,0].title.set_text(title)
+      try:
+        title = f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}'
+        axs[0,0].title.set_text(title)
+      except Exception as e:
+        pass
 
     fig.tight_layout()
 
