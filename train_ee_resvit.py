@@ -206,7 +206,6 @@ def train(run_dir, load_from=None, exp_name=None):
         for budget in budgets:
             
             # compute accuracy given budget
-            correct = 0
             total = 0
             for batch, labels in tqdm(loader, desc=f'Validating epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
@@ -215,9 +214,7 @@ def train(run_dir, load_from=None, exp_name=None):
                 total += labels.size(0)
                 for i, out in enumerate(outs):
                     _, predicted = torch.max(out.data, 1)
-                    
-                    correct += (predicted == labels).sum().item()
-                    correct_per_exit[f'exit:{i}'] += correct 
+                    correct_per_exit[f'exit:{i}'] += (predicted == labels).sum().item() 
                 
             for i, correct in correct_per_exit.items():
                 acc = correct / total
