@@ -202,9 +202,9 @@ def train(run_dir, load_from=None, exp_name=None):
         if noise_block is not None:
             noise_block.set_value(0.0)
 
-        correct_per_exit = defaultdict(int)
+        
         for budget in budgets:
-            
+            correct_per_exit = defaultdict(int)
             # compute accuracy given budget
             total = 0
             for batch, labels in tqdm(loader, desc=f'Validating epoch {epoch} with budget {budget}'):
