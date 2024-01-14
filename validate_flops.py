@@ -9,7 +9,7 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, load_state, add_noise
+from utils.utils import load_state
 from utils.logging import SimpleLogger, WandbLogger
 from utils.flops_count import compute_flops
 from peekvit.dataset import get_imagenette
@@ -61,7 +61,7 @@ def validate_flops(run_dir, load_from=None, epoch=None, budgets=None):
     model.eval()
 
     
-    accs, flops = [], []
+    accs, flops, sparsities = [], [], []
     for budget in budgets:
         
         # compute accuracy given budget
@@ -100,19 +100,25 @@ def validate_flops(run_dir, load_from=None, epoch=None, budgets=None):
 
         # avg sparsity 
         avg_sparsity = 0
+        num_masking_modules = 0
         for name, module in model.named_modules():
             if hasattr(module, 'avg_sparsity'):
-                avg_sparsity += module.avg_sparsity 
+                avg_sparsity += module.avg_sparsity.detach().cpu().item()
                 module.avg_sparsity = 0
-        logger.log('Average sparsity: ' + str(avg_sparsity / len(list(model.named_modules()))))
+                num_masking_modules += 1
+        avg_sparsity = avg_sparsity / (len(list(model.named_modules()) * validation_args['eval_batch_size'] * num_masking_modules))
+        sparsities.append(avg_sparsity)
+        logger.log('Average sparsity: ' + str(avg_sparsity))
     
     logger.log({'flops': flops})
     # log accuracy vs budget
-    from visualize import plot_budget_vs_acc
+    from visualize import plot_budget_vs_acc, plot_budget_vs_sparsity
     fig_budget = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
     fig_flops = plot_budget_vs_acc(flops, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_flops' if validation_args['save_images_locally'] else None)
+    fig_sparsity = plot_budget_vs_sparsity(flops, sparsities, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_sparsity' if validation_args['save_images_locally'] else None)
+
     if validation_args['save_images_to_wandb']:
-        logger.log({'val_accuracy_vs_flops': fig_flops, 'val_accuracy_vs_budget': fig_budget})
+        logger.log({'val_accuracy_vs_flops': fig_flops, 'val_accuracy_vs_budget': fig_budget, 'val_accuracy_vs_sparsity': fig_sparsity})
 
 
 

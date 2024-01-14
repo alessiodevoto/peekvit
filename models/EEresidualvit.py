@@ -261,7 +261,7 @@ class ResidualViTBlock(ResidualModule):
 
 
 # ViT Encoder
-class ResidualViTEncoder(nn.Module):
+class EEResidualViTEncoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
     def __init__(
@@ -282,6 +282,7 @@ class ResidualViTEncoder(nn.Module):
         gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
         budget_token: Union[bool, List, Literal['learnable']] = False,
+        num_classes: int = 10
 
     ):
         super().__init__()
@@ -291,6 +292,7 @@ class ResidualViTEncoder(nn.Module):
         self.num_registers = num_registers
         self.num_special_tokens = num_class_tokens + num_registers
         self.budget_token = budget_token
+        self.num_classes = num_classes
         
         self.num_budget_tokens = 0 if not budget_token else 1
 
@@ -317,6 +319,8 @@ class ResidualViTEncoder(nn.Module):
 
         self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
+        self.early_exits = nn.ModuleList([
+            nn.Sequential(nn.LayerNorm(hidden_dim), nn.Linear(hidden_dim, self.num_classes)) for _ in range(num_layers)])
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -330,12 +334,17 @@ class ResidualViTEncoder(nn.Module):
         if self.budget_token:
             input = torch.cat([input, budget_tokens], dim=1)
         input = self.dropout(input)
-        input = self.layers(input)
-        return self.ln(input)
+        
+        early_exits = []
+        for i in range(self.num_layers):
+            input = self.layers[i](input)
+            early_exits.append(self.early_exits[i](input[:, 0:self.num_class_tokens]))
+        
+        return self.ln(input), early_exits
 
 
 
-class ResidualVisionTransformer(nn.Module):
+class EEResidualVisionTransformer(nn.Module):
     """
     Residual Vision Transformer model for image classification.
 
@@ -426,7 +435,7 @@ class ResidualVisionTransformer(nn.Module):
         self.num_special_tokens = num_class_tokens + num_registers
 
 
-        self.encoder = ResidualViTEncoder(
+        self.encoder = EEResidualViTEncoder(
             seq_length,
             num_layers,
             num_heads,
@@ -441,6 +450,7 @@ class ResidualVisionTransformer(nn.Module):
             gate_bias=gate_bias,
             gate_threshold=gate_threshold,
             budget_token=add_budget_token,
+            num_classes=num_classes
             )
     
         self.seq_length = seq_length
@@ -583,7 +593,7 @@ class ResidualVisionTransformer(nn.Module):
             x = self._add_budget_token(x)
         
         # Pass through the encoder
-        x = self.encoder(x)
+        x, early_exits = self.encoder(x)
 
         # Get all class tokens and average them
         x = x[:, 0:self.num_class_tokens]
@@ -593,7 +603,7 @@ class ResidualVisionTransformer(nn.Module):
         # Classification head
         x = self.head(x)
 
-        return x
+        return x, early_exits
 
 
     def set_budget(self, budget: float):

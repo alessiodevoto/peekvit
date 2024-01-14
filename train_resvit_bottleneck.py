@@ -13,12 +13,12 @@ import random
 from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
 from utils.logging import WandbLogger, SimpleLogger
 from models.models import build_model
-from utils.topology import add_residual_gates, reinit_class_tokens
+from utils.topology import reinit_class_tokens
 from utils.adapters import from_vit_to_residual_vit
 from utils.utils import add_noise
 from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 from peekvit.dataset import get_imagenette
-from peekvit.losses import get_loss
+from peekvit.losses import get_losses
 
 torch.manual_seed(0)
 
@@ -61,14 +61,14 @@ model_args = {} # we use a pretrained model, so we do not need to specify the mo
 
 gate_args = {
     'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': -1,
-    'add_budget_token':  'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
+    'gate_bias': 3,
+    'add_budget_token': 'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
+
 
 training_args = {
     'train_batch_size': 128,
@@ -77,17 +77,20 @@ training_args = {
     'num_epochs': 200,
     'eval_every': 10,
     'checkpoint_every': 10,
-    'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.1, 0],
-    'additional_loss_args': {
-        'budget': 'budget_token', 
-        'strict': False},
     'reinit_class_tokens': True,
     'wandb': True,
     'save_images_locally': False,
     'save_images_to_wandb': True,
     }
 
+
+additional_losses_args = {
+    'solo_mse' : {
+        'budget': 'budget_token', 
+        'strict': False,
+        'weight': 0.1,
+        },
+    }
 
 
 """noise_args = {
@@ -102,7 +105,7 @@ training_args = {
 noise_args = {}
 
 
-VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.85]
+VALIDATE_BUDGETS = [gate_args['add_budget_token']] if isinstance(gate_args['add_budget_token'], (float, list, tuple)) else [0.25, 0.85]
 
 
 def train(run_dir, load_from=None, exp_name=None):
@@ -131,7 +134,7 @@ def train(run_dir, load_from=None, exp_name=None):
     
     # logging
     if training_args['wandb']:
-        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args, wandb_run=exp_name, wandb_run_dir=run_dir)
+        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args | additional_losses_args, wandb_run=exp_name, wandb_run_dir=run_dir)
     else:
         logger = SimpleLogger(join(run_dir, 'logs.txt'))
         logger.log({'model_class': model_class, 'model_args': model_args, 'gate_args': gate_args, 'noise_args': noise_args, 'training_args': training_args})
@@ -149,25 +152,24 @@ def train(run_dir, load_from=None, exp_name=None):
         
     # losses
     main_criterion = torch.nn.CrossEntropyLoss()
-    regularization = get_loss(training_args['additional_loss'], training_args['additional_loss_args'])
-    intra_weight, inter_weight = training_args['additional_loss_weights']
+    regs, reg_weights = get_losses(additional_losses_args)
 
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
 
     # budget for regularization
     # if budget is a float, it is used as a constant, else we use the budget token which is the last token in the sequence
-    training_budget = training_args['additional_loss_args']['budget']
-    if training_budget == 'budget_token':
+    training_budget = gate_args['add_budget_token']
+    if isinstance(training_budget, str):
         get_training_budget = lambda model : model.current_budget
     else:
         # training budget is a float
-        get_training_budget = lambda model : training_budget
+        get_training_budget = lambda _ : training_budget
 
     def train_epoch(model, loader, optimizer, epoch=None):
         model.train()
         model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
-        running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             # set noise
             if noise_block is not None:
@@ -179,19 +181,19 @@ def train(run_dir, load_from=None, exp_name=None):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels)    
-            intra_reg = regularization(model, budget=get_training_budget(model))
-            loss = main_loss + intra_reg * intra_weight # + inter_reg * inter_weight
+            
+
+            # multiply each regularization loss by its weight
+            regularization_losses = {loss_name: loss_fn(model, budget=get_training_budget(model)) for loss_name, loss_fn in regs.items()}
+            for loss_name, loss_value in regularization_losses.items():
+                regularization_losses[loss_name] = loss_value * reg_weights[loss_name]
+
+            
+            loss = main_loss + torch.sum(torch.stack([x for x in regularization_losses.values()], dim=-1))
             loss.backward()
             optimizer.step()
             
-            # update running losses
-            running_loss += loss.detach().item()
-            running_main_loss += main_loss.detach().item()
-            running_intra += intra_reg.detach().item() * intra_weight
-            running_inter += 0.0 #inter_reg.detach().item() * inter_weight
-
-        # logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
-        logger.log({'epoch':epoch, 'train_loss': running_loss / len(loader), 'train_main_loss': running_main_loss / len(loader), 'train_intra': running_intra / len(loader), 'train_inter': running_inter / len(loader)})
+            logger.log(regularization_losses | {'train_loss': loss.item(), 'train_main_loss': main_loss.item()})
 
 
     @torch.no_grad()

@@ -77,6 +77,36 @@ def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
   return fig
 
 
+def plot_budget_vs_sparsity(budgets, accs, epoch, save_dir):
+  """
+  Plots the accuracy vs budget curve for the given budgets and accuracies.
+
+  Args:
+    budgets (List): The budgets.
+    accs (List): The accuracies.
+    save_dir (str): The directory to save the plot.
+
+  Returns:
+    None
+  """
+  fig, ax = plt.subplots()
+  ax.plot(budgets, accs, marker='o')
+
+  # set labels
+  ax.set_xlabel('Budget')
+  ax.set_ylabel('Sparsity')
+  ax.set_title('Budget vs Sparsity')
+
+  # set y range
+  plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+
+  # create save dir if it does not exist
+  if save_dir is not None:
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    plt.savefig(os.path.join(save_dir, f'budget_vs_sparsity_{epoch}.png'))
+  
+  return fig
+
 def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   """
   Plots the accuracy vs noise curve for the given noises and accuracies.

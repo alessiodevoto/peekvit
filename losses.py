@@ -4,7 +4,7 @@ from einops import reduce
 from torch.nn.functional import cross_entropy, relu
 from torch.special import entr
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import List, Literal
 
 
 
@@ -56,13 +56,10 @@ def sparsity_loss_per_block(model, budget: float = 0.65, sparsity_type : Literal
         # print(sparsity)
         intra_entropy.append(entr(sparsity))
         
-
-
     sparsity_loss = torch.stack(sparsity_loss)
-    intra_entropy = torch.stack(intra_entropy)
 
 
-    return torch.mean(sparsity_loss), torch.mean(intra_entropy)
+    return torch.mean(sparsity_loss)
 
 
 def entropy_per_blocks(model, **kwargs):
@@ -78,9 +75,8 @@ def entropy_per_blocks(model, **kwargs):
         intra_entopy.append(entr(sparsity))
     
     intra_entopy = torch.stack(intra_entopy)
-    inter_entropy = entr(intra_entopy)
 
-    return torch.mean(intra_entopy), torch.mean(inter_entropy),
+    return torch.mean(intra_entopy), 
 
 
 def solo_l1(model, budget: float = 0.25, strict:bool = False, **kwargs):
@@ -96,21 +92,18 @@ def solo_l1(model, budget: float = 0.25, strict:bool = False, **kwargs):
     
     sparsity_loss = torch.stack(sparsity_loss)
 
-    # inter_sparsity = entr(sparsity_loss)
-    additional_l1 = torch.abs(sparsity_loss - budget)
+    return torch.mean(sparsity_loss)
 
 
-    return torch.mean(sparsity_loss),  torch.mean(additional_l1)
-
-
-def solo_mse(model, budget: float = 0.65, strict: bool = False, **kwargs):
+def solo_mse(model, budget: float = 0.65, strict: bool = False, skip_layers: List = [], **kwargs):
     
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
     masks = get_forward_masks(model)
 
     # iterate over masks
     sparsity_loss = []
-    for _, mask in masks.items():
+    for layer, (_, mask) in enumerate(masks.items()):
+        if layer in skip_layers: continue
         sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
         # if budget > 0.9 : strict = True # TODO quick test
         sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
@@ -119,12 +112,10 @@ def solo_mse(model, budget: float = 0.65, strict: bool = False, **kwargs):
     
     sparsity_loss = torch.stack(sparsity_loss)
 
-    inter_sparsity = entr(sparsity_loss)
-
-    return torch.mean(sparsity_loss),  torch.mean(inter_sparsity)
+    return torch.mean(sparsity_loss)
 
 
-def l1_and_intraentropy(model, budget: float = 0.65, **kwargs):
+def l1_and_intraentropy(model, budget: float = 0.65,  **kwargs):
 
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
     masks = get_forward_masks(model)
@@ -139,9 +130,8 @@ def l1_and_intraentropy(model, budget: float = 0.65, **kwargs):
         intra_entropy.append(entr(sparsity))
     
     sparsity_loss = torch.stack(sparsity_loss)
-    intra_entropy = torch.stack(intra_entropy)
 
-    return torch.mean(sparsity_loss), torch.mean(intra_entropy)
+    return torch.mean(sparsity_loss)
 
 
 ####################################################### class implementations ##################################################################
@@ -219,10 +209,11 @@ class MSELoss(ResidualModelLoss):
     Computes the MSE loss of the model.
     """
 
-    def __init__(self, budget: float, strict: bool = False) -> None:
+    def __init__(self, budget: float, strict: bool = False, skip_layers : List = [], **kwargs) -> None:
         super().__init__()
         self.budget = budget
         self.strict = strict
+        self.skip_layers = skip_layers
 
     def forward(self, model, budget = None, **kwargs):
         """
@@ -236,7 +227,7 @@ class MSELoss(ResidualModelLoss):
             torch.Tensor: The MSE loss.
         """
         
-        return solo_mse(model, budget if budget is not None else self.budget, self.strict)
+        return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
 
 
 class L1AndIntraEntropyLoss(ResidualModelLoss):
@@ -300,3 +291,16 @@ def get_loss(loss_type, loss_args):
         raise ValueError(f'Loss type must be one of {LOSSES_MAP.keys()}')
 
     return LOSSES_MAP[loss_type](**loss_args)
+
+
+def get_losses(losses):
+    """
+    Retrieves the loss functions with the given types and arguments.
+
+    Args:
+        losses (dict): The types and arguments of the loss functions.
+
+    Returns:
+        list: A dict containing the loss functions.
+    """
+    return {f'{loss_type}': get_loss(loss_type, loss_args) for loss_type, loss_args in losses.items()}, {f'{loss_type}': loss_args['weight'] for loss_type, loss_args in losses.items()}
