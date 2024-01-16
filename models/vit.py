@@ -213,13 +213,5 @@ class VisionTransformer(nn.Module):
 
         return x
 
-
-
-
-# Test
-"""
-vitmoe = VisionTransformerMoE(image_size = 64, num_layers=2, patch_size=32, num_heads=4, hidden_dim=4, mlp_dim=32, dropout=0.0, attention_dropout=0.0, mlp_moes=[5, 10])
-data = torch.randn(2, 3, 64, 64)
-out = vitmoe(data)
-out.mean().backward()
-"""
+    # TODO: add a method 'from_pytorch' that takes a pytorch model and converts it to a peekvit model
+    

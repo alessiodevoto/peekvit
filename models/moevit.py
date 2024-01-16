@@ -10,10 +10,9 @@ from .blocks import GumbelSoftmax, SelfAttention, MLP
 
 """
 A Vision Transformer with Mixture of Experts which can be placed at any layer, both on Attentoin and MLPs.
-Not a very efficient implementation as experts are excuted sequentially.
+Not a very efficient implementation as experts are excuted sequentially, but will do for now.
 """
  
-
 
 # Abstract class for MoE
 class MoE(ABC, nn.Module):
@@ -188,9 +187,25 @@ class ViTEncoderMoE(nn.Module):
         return self.ln(input)
 
 
-# ViT MoE
+
 class VisionTransformerMoE(nn.Module):
-    """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
+    """
+    Vision Transformer with Mixture of Experts (MoE) architecture.
+
+    Args:
+      image_size (int): The size of the input image.
+      patch_size (int): The size of each patch in the image.
+      num_layers (int): The number of layers in the transformer.
+      num_heads (int): The number of attention heads in each transformer layer.
+      hidden_dim (int): The dimensionality of the hidden layer in the transformer.
+      mlp_dim (int): The dimensionality of the MLP layer in the transformer.
+      dropout (float, optional): The dropout rate. Defaults to 0.0.
+      attention_dropout (float, optional): The dropout rate for attention layers. Defaults to 0.0.
+      num_classes (int, optional): The number of output classes. Defaults to 1000.
+      representation_size (int, optional): The size of the output representation. Defaults to None.
+      mlp_moes (List, optional): The list of indices of transformer layers which should be MLP MoE. Defaults to None.
+      attn_moes (List, optional): The list of indices of transformer layers which should be attention MoE. Defaults to None.
+    """
 
     def __init__(
         self,
@@ -286,8 +301,7 @@ class VisionTransformerMoE(nn.Module):
         batch_class_token = self.class_token.expand(n, -1, -1)
         x = torch.cat([batch_class_token, x], dim=1)
 
-        
-
+      
         x = self.encoder(x)
 
         # Classifier "token" as used by standard language architectures
@@ -299,11 +313,3 @@ class VisionTransformerMoE(nn.Module):
 
 
 
-
-# Test
-"""
-vitmoe = VisionTransformerMoE(image_size = 64, num_layers=2, patch_size=32, num_heads=4, hidden_dim=4, mlp_dim=32, dropout=0.0, attention_dropout=0.0, mlp_moes=[5, 10])
-data = torch.randn(2, 3, 64, 64)
-out = vitmoe(data)
-out.mean().backward()
-"""
