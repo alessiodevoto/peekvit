@@ -1,24 +1,25 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from torchvision import transforms as T
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torch.utils.data import DataLoader
 import torch
 from tqdm import tqdm
 from os.path import join
 import argparse
 import random
+from collections import defaultdict
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
-from utils.logging import WandbLogger, SimpleLogger
-from models.models import build_model
-from utils.topology import reinit_class_tokens
-from peekvit.models.adapters import from_vit_to_residual_vit, from_torch_vit_to_residual_vit
-from utils.utils import add_noise
-from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
-from peekvit.dataset import get_imagenette
-from peekvit.losses import get_loss
+
+from peekvit.utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
+from peekvit.utils.logging import WandbLogger, SimpleLogger
+from peekvit.models.models import build_model
+from peekvit.models.topology import reinit_class_tokens
+from peekvit.models.adapters import from_vit_to_eeresidual_vit
+from peekvit.utils.utils import add_noise
+from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.data.dataset import get_imagenette
+from peekvit.utils.losses import get_losses
 
 torch.manual_seed(0)
 
@@ -57,28 +58,18 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model_class = 'ResidualVisionTransformer'
 
-vit_args = {
-    'image_size':224,
-    'patch_size':16,
-    'num_layers':12,
-    'num_heads':12,
-    'hidden_dim':768,
-    'mlp_dim':3072,
-    'num_classes':10,
-} # if we use a pretrained model, so we do not need to specify the model args
-
-
+model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
-    #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
+    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': -1,
-    'add_budget_token':  'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
+    'gate_bias': 3,
+    'add_budget_token': 'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
+
 
 training_args = {
     'train_batch_size': 128,
@@ -87,11 +78,6 @@ training_args = {
     'num_epochs': 200,
     'eval_every': 10,
     'checkpoint_every': 10,
-    'additional_loss': 'solo_mse',
-    'additional_loss_weights': [0.1, 0],
-    'additional_loss_args': {
-        'budget': 'budget_token', 
-        'strict': False},
     'reinit_class_tokens': True,
     'wandb': True,
     'save_images_locally': False,
@@ -99,21 +85,18 @@ training_args = {
     }
 
 
-
-
-"""noise_args = {
-    'layer': 2,
-    'noise_type': 'token_drop',
-    'snr': None,
-    'prob': None,
-    'std': None,
-    'noise_range': [0.0, 0.1, 0.2, 0.3],
-}"""
+additional_losses_args = {
+    'solo_mse' : {
+        'budget': 'budget_token', 
+        'strict': False,
+        'weight': 0.1,
+        },
+    }
 
 noise_args = {}
 
 
-VALIDATE_BUDGETS = [None] if training_args['additional_loss_args']['budget'] != 'budget_token' else [0.25, 0.85]
+VALIDATE_BUDGETS = [gate_args['add_budget_token']] if isinstance(gate_args['add_budget_token'], (float, list, tuple)) else [0.25, 0.85]
 
 
 def train(run_dir, load_from=None, exp_name=None):
@@ -133,17 +116,16 @@ def train(run_dir, load_from=None, exp_name=None):
         load_from = join(load_from, last_checkpoint)
         print(f'Loading model from {load_from}')
         checkpoint_model_class = torch.load(load_from)['model_class']
-        print(f'Checkpoint model class: {checkpoint_model_class}')
         if checkpoint_model_class == 'VisionTransformer':
-            model, model_args = from_vit_to_residual_vit(load_from, gate_args, vit_args)
-        elif checkpoint_model_class == 'ResidualVisionTransformer':
+            model, model_args = from_vit_to_eeresidual_vit(load_from, gate_args)
+        elif checkpoint_model_class == 'EEResidualVisionTransformer':
             model, _, _, model_args, _ = load_state(load_from, model=None, optimizer=None)
     else:
         model = build_model(model_class, model_args)
     
     # logging
     if training_args['wandb']:
-        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args, wandb_run=exp_name, wandb_run_dir=run_dir)
+        logger = WandbLogger(entity=wandb_entity, project=wandb_project, config=training_args | gate_args | model_args | noise_args | additional_losses_args, wandb_run=exp_name, wandb_run_dir=run_dir)
     else:
         logger = SimpleLogger(join(run_dir, 'logs.txt'))
         logger.log({'model_class': model_class, 'model_args': model_args, 'gate_args': gate_args, 'noise_args': noise_args, 'training_args': training_args})
@@ -161,25 +143,24 @@ def train(run_dir, load_from=None, exp_name=None):
         
     # losses
     main_criterion = torch.nn.CrossEntropyLoss()
-    regularization = get_loss(training_args['additional_loss'], training_args['additional_loss_args'])
-    intra_weight, inter_weight = training_args['additional_loss_weights']
+    regs, reg_weights = get_losses(additional_losses_args)
 
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
 
     # budget for regularization
     # if budget is a float, it is used as a constant, else we use the budget token which is the last token in the sequence
-    training_budget = training_args['additional_loss_args']['budget']
-    if training_budget == 'budget_token':
+    training_budget = gate_args['add_budget_token']
+    if isinstance(training_budget, str):
         get_training_budget = lambda model : model.current_budget
     else:
         # training budget is a float
-        get_training_budget = lambda model : training_budget
+        get_training_budget = lambda _ : training_budget
 
     def train_epoch(model, loader, optimizer, epoch=None):
         model.train()
         model = train_only_these_params(model, verbose=False, params_list=['gate', 'budget', 'class', 'head', 'threshold'])
-        running_loss, running_main_loss, running_intra, running_inter = 0.0, 0.0, 0.0, 0.0
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             # set noise
             if noise_block is not None:
@@ -189,21 +170,29 @@ def train(run_dir, load_from=None, exp_name=None):
             # forward pass
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
-            out = model(batch)
-            main_loss = main_criterion(out, labels)    
-            intra_reg = regularization(model, budget=get_training_budget(model))
-            loss = main_loss + intra_reg * intra_weight # + inter_reg * inter_weight
+            outs = model(batch)
+            
+            # we hve to compute the loss for each early exit
+            main_losses = {}
+            for i, out in enumerate(outs):
+                main_losses[f'exit:{i}'] = main_criterion(out, labels)
+            
+            # compute the main loss
+            main_loss = torch.sum(torch.stack([x for x in main_losses.values()], dim=-1))
+            
+
+            # multiply each regularization loss by its weight
+            regularization_losses = {loss_name: loss_fn(model, budget=get_training_budget(model)) for loss_name, loss_fn in regs.items()}
+            for loss_name, loss_value in regularization_losses.items():
+                regularization_losses[loss_name] = loss_value * reg_weights[loss_name]
+
+            
+            loss = main_loss + torch.sum(torch.stack([x for x in regularization_losses.values()], dim=-1))
             loss.backward()
             optimizer.step()
             
-            # update running losses
-            running_loss += loss.detach().item()
-            running_main_loss += main_loss.detach().item()
-            running_intra += intra_reg.detach().item() * intra_weight
-            running_inter += 0.0 #inter_reg.detach().item() * inter_weight
+            logger.log(regularization_losses | main_losses | {'train_loss': loss.item(), 'train_main_loss': main_loss.item() })
 
-        # logger.log(f'Epoch {epoch:03} Train loss: {running_loss / len(loader)}. Main loss: {running_main_loss / len(loader)}. intra: {running_intra / len(loader)}. inter: {running_inter / len(loader)}')
-        logger.log({'epoch':epoch, 'train_loss': running_loss / len(loader), 'train_main_loss': running_main_loss / len(loader), 'train_intra': running_intra / len(loader), 'train_inter': running_inter / len(loader)})
 
 
     @torch.no_grad()
@@ -213,27 +202,28 @@ def train(run_dir, load_from=None, exp_name=None):
         if noise_block is not None:
             noise_block.set_value(0.0)
 
-        accs = []
+        
         for budget in budgets:
-            
+            correct_per_exit = defaultdict(int)
             # compute accuracy given budget
-            correct = 0
             total = 0
             for batch, labels in tqdm(loader, desc=f'Validating epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
                 model.set_budget(float(budget))
-                out = model(batch)
-                _, predicted = torch.max(out.data, 1)
+                outs = model(batch)
                 total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-            acc = correct / total
-            logger.log({f'val_accuracy/budget_{budget}': acc})
-            accs.append(acc)
-
+                for i, out in enumerate(outs):
+                    _, predicted = torch.max(out.data, 1)
+                    correct_per_exit[f'exit:{i}'] += (predicted == labels).sum().item() 
+                
+            for i, correct in correct_per_exit.items():
+                acc = correct / total
+                logger.log({f'val_accuracy/budget_{budget}/{i}': acc})    
+            
 
             # visualize predictions
             if training_args['save_images_locally'] or training_args['save_images_to_wandb']:
-                from visualize import img_mask_distribution
+                from peekvit.utils.visualize import img_mask_distribution
                 img_mask_distribution(model, 
                             val_dataset,
                             torch.arange(0, 4000, 400), 
@@ -246,9 +236,9 @@ def train(run_dir, load_from=None, exp_name=None):
                             )
 
         # log accuracy vs budget
-        from visualize import plot_budget_vs_acc
-        val_accuracy_vs_budget_fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)
-        logger.log({'val_accuracy_vs_budget': val_accuracy_vs_budget_fig})
+        #from visualize import plot_budget_vs_acc
+        # val_accuracy_vs_budget_fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)
+        #logger.log({'val_accuracy_vs_budget': val_accuracy_vs_budget_fig})
             
     
 

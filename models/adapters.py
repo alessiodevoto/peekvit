@@ -1,5 +1,5 @@
-from models.residualvit import ResidualVisionTransformer
-from peekvit.models.eeresidualvit import EEResidualVisionTransformer
+from .residualvit import ResidualVisionTransformer
+from .eeresidualvit import EEResidualVisionTransformer
 import torch
 from torch import nn
 import re

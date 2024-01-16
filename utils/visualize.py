@@ -16,7 +16,7 @@ from pathlib import Path
 
 import wandb
 
-from utils.utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
+from .utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
 ######################################################## Utils ##################################################################
 
@@ -66,7 +66,7 @@ def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
   ax.set_title('Budget vs Accuracy')
 
   # set y range
-  plt.ylim([0.4, 0.9])
+  # plt.ylim([0.4, 0.9])
   plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
 
   # create save dir if it does not exist
@@ -128,7 +128,7 @@ def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   ax.set_title('Noise vs Accuracy' if additional_label is None else f'Noise vs Accuracy ({additional_label})')
 
   # set y range
-  plt.ylim([0.1, 0.9])
+  # plt.ylim([0.1, 0.9])
 
   # create save dir if it does not exist
   if save_dir is not None:
@@ -153,7 +153,7 @@ def plot_budget_vs_noise_vs_acc(results_per_budget: dict, save_dir: str = None):
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
         # set y range
-        plt.ylim([0.1, 0.9])
+        # plt.ylim([0.1, 0.9])
 
         # create save dir if it does not exist
         if save_dir is not None:
@@ -180,7 +180,7 @@ def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = N
           ax.set_title('Noise vs Accuracy across budgets')
           ax.legend()
           # set y range
-          plt.ylim([0.1, 0.9])
+          # plt.ylim([0.1, 0.9])
 
           # create save dir if it does not exist
           if save_dir is not None:
@@ -219,7 +219,7 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
             # set y range
-            plt.ylim([0.1, 0.9])
+            # plt.ylim([0.1, 0.9])
 
             
             #x_ticks = [f'{x}({y})' for x,y in zip(results.keys(), additional_x_labels)] if additional_x_labels is not None else results.keys()
@@ -392,7 +392,7 @@ def img_mask_distribution(
     model.set_budget(budget)
     out = model(make_batch(_img).to(device))
     
-    from dataset import IMAGENETTE_CLASSES
+    from peekvit.data.dataset import IMAGENETTE_CLASSES
     #print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks

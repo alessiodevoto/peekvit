@@ -2,7 +2,6 @@ import os
 import wandb
 from pprint import pprint
 
-######################################################## Logging ##################################################################
 class SimpleLogger:
     """
     Simple logger for logging to stdout and to a file.

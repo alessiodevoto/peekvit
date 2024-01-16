@@ -1,10 +1,11 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from collections import OrderedDict
 from typing import List
 import torch
-import os  
 from datetime import datetime
 from os.path import join
-from models.models import build_model
+from peekvit.models.models import build_model
 
 
 def make_experiment_directory(base_path, is_eval:bool=False):
@@ -160,8 +161,6 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
 
 
 
-
-
 ######################################################## Training ##################################################################
 
 
@@ -205,80 +204,6 @@ def load_state(path, model=None, optimizer=None):
     return model, optimizer, state['epoch'], state['model_args'], state['noise_args']
 
 
-
-######################################################## Model editing ##################################################################
-
-
-def add_residual_gates(residualvit_model, residual_gates_args):
-    from models.residualvit import ResidualGate, ResidualViTBlock
-    skip = residual_gates_args['residual_layers']
-    gate_type = residual_gates_args['gate_type']
-    add_input = residual_gates_args['add_input']
-    temp = residual_gates_args['gate_temp']
-    i = 0
-    for module_name, module in residualvit_model.named_modules():
-        if isinstance(module, ResidualViTBlock) and skip[i] in {'attention+mlp', 'attention', 'mlp'}:
-            print(f'Adding residual gate to {module_name}')
-            module.skip = skip[i]  
-            module.add_input = add_input
-            module.residual_gate = ResidualGate(module.hidden_dim, temp=temp, gate_type=gate_type)
-            i += 1
-    return residualvit_model
-
-
-def freeze_module(module):
-    # freeze all parameters of the module
-    for param in module.parameters():
-        param.requires_grad = False
-
-
-def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
-    # freeze all parameters except the gates
-    print('Freezing all parameters except the gates and the class token')
-    
-    frozen_params, trainable_params = [], []
-    for param_name, param in residualvit_model.named_parameters():
-        if any([x in param_name for x in ['gate', 'class', 'head', 'threshold']]):
-            param.requires_grad = True
-            trainable_params.append(param_name)
-        else:
-            param.requires_grad = False
-            frozen_params.append(param_name)
-    
-    if verbose:
-        print('Trainable parameters:', trainable_params)
-        print('Frozen parameters:', frozen_params)
-
-    return residualvit_model
-
-
-def train_only_these_params(residualvit_model, params_list: List, verbose:bool=False):
-    
-    print('Freezing all parameters except for those containing any of these words in their names: ', params_list)
-    
-    frozen_params, trainable_params = [], []
-    for param_name, param in residualvit_model.named_parameters():
-        if any([x in param_name for x in params_list]):
-            param.requires_grad = True
-            trainable_params.append(param_name)
-        else:
-            param.requires_grad = False
-            frozen_params.append(param_name)
-    
-    if verbose:
-        print('Trainable parameters:', trainable_params)
-        print('Frozen parameters:', frozen_params)
-
-    return residualvit_model
-
-def reinit_class_tokens(model):
-    # reinitialize the class token
-    for param_name, param in model.named_parameters():
-        if 'class' in param_name:
-            print(f'Reinitializing {param_name}...', end=' ')
-            torch.nn.init.normal_(param, mean=0.0, std=0.02)
-            print('Reinitialized!')
-    return model
 
 
 ######################################################## Mix ##################################################################

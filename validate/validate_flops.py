@@ -1,5 +1,5 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
@@ -9,11 +9,12 @@ import argparse
 
 
 
-from utils.utils import load_state
-from utils.logging import SimpleLogger, WandbLogger
-from utils.flops_count import compute_flops
-from peekvit.dataset import get_imagenette
-from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.utils.utils import load_state
+from peekvit.utils.logging import SimpleLogger, WandbLogger
+from peekvit.utils.flops_count import compute_flops
+from peekvit.utils.visualize import plot_budget_vs_acc, plot_budget_vs_sparsity
+from peekvit.data.dataset import get_imagenette
+from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
 torch.manual_seed(0)
@@ -113,7 +114,6 @@ def validate_flops(run_dir, load_from=None, epoch=None, budgets=None, n_exit=-1)
     
     logger.log({'flops': flops})
     # log accuracy vs budget
-    from visualize import plot_budget_vs_acc, plot_budget_vs_sparsity
     fig_budget = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
     fig_flops = plot_budget_vs_acc(flops, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_flops' if validation_args['save_images_locally'] else None)
     fig_sparsity = plot_budget_vs_sparsity(flops, sparsities, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_sparsity' if validation_args['save_images_locally'] else None)

@@ -206,7 +206,7 @@ class VisionTransformer(nn.Module):
 
         # Get all class tokens and average them
         x = x[:, 0:self.num_class_tokens]
-        x = reduce(x, 'n c e -> n e', reduction='mean')
+        x = reduce(x, 'n c e -> n e', reduction='sum')
 
         # Classification head
         x = self.head(x)

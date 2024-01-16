@@ -12,17 +12,6 @@ IMAGENETTE_URL = 'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz
 
 # TODO: fix image size
 
-IMAGENETTE_TEST_TRANSFORM  =  T.Compose([
-                              T.Resize(224),
-                              T.CenterCrop(224),
-                              T.ToTensor(),
-                              T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-
-IMAGENETTE_TRAIN_TRANSFORM =  T.Compose([
-                              T.RandomResizedCrop(224),
-                              T.RandomHorizontalFlip(),
-                              T.ToTensor(),
-                              T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
 IMAGENETTE_DENORMALIZE_TRANSFORM = T.Compose([
                               T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
@@ -32,22 +21,53 @@ IMAGENETTE_DENORMALIZE_TRANSFORM = T.Compose([
 IMAGENETTE_CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church', 'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
 
+def get_imagenette_trainsforms(image_size: int = 160):
+    """
+    Returns the default train and test transforms for the Imagenette dataset.
+    
+    Args:
+      image_size (int, optional): The size of the images. Default is 160.
+    
+    Returns:
+      tuple: A tuple containing (train transform, test transform).
 
-def get_imagenette(root, train_transform=IMAGENETTE_TRAIN_TRANSFORM, test_transform=IMAGENETTE_TEST_TRANSFORM, target_transform=None):
+    """
+    test_transform  =  T.Compose([
+                        T.Resize(image_size),
+                        T.CenterCrop(image_size),
+                        T.ToTensor(),
+                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
+    train_transform =  T.Compose([
+                        T.RandomResizedCrop(image_size),
+                        T.RandomHorizontalFlip(),
+                        T.ToTensor(),
+                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    
+    return train_transform, test_transform
+
+def get_imagenette(root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160):
     """
     Retrieves the Imagenette dataset from the specified root directory.
+    If transforms are not specified, the default transforms are used.
     
     Args:
       root (str): The root directory to store the dataset.
       train_transform (callable, optional): A function/transform that takes in a training sample and returns a transformed version. Default is None.
       test_transform (callable, optional): A function/transform that takes in a test sample and returns a transformed version. Default is None.
       target_transform (callable, optional): A function/transform that takes in the target and transforms it. Default is None.
+      image_size (int, optional): The size of the images. Default is 160. 
     
     Returns:
       tuple: A tuple containing (train, validation, default train transform, default test transform).
 
     """
-    
+
+    # get default transforms if not specified
+    _train_transform, _test_transform = get_imagenette_trainsforms(image_size=image_size)
+    train_transform = train_transform or _train_transform
+    test_transform = test_transform or _test_transform
+
     # create directory to store the dataset
     os.makedirs(root, exist_ok=True)
 

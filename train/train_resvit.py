@@ -1,5 +1,5 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
@@ -10,15 +10,14 @@ import random
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
-from utils.logging import WandbLogger, SimpleLogger
+from peekvit.utils.utils import make_experiment_directory, save_state, load_state, add_noise
+from peekvit.utils.logging import WandbLogger, SimpleLogger
 from models.models import build_model
-from utils.topology import reinit_class_tokens
+from peekvit.models.topology import reinit_class_tokens, train_only_these_params
 from peekvit.models.adapters import from_vit_to_residual_vit
-from utils.utils import add_noise
-from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
-from peekvit.dataset import get_imagenette
-from peekvit.losses import get_losses
+from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.data.dataset import get_imagenette
+from peekvit.utils.losses import get_losses
 
 torch.manual_seed(0)
 
@@ -87,7 +86,7 @@ training_args = {
 additional_losses_args = {
     'solo_mse' : {
         'budget': 'budget_token', 
-        'strict': True,
+        'strict': False,
         'weight': 0.5,
         },
     }

@@ -1,5 +1,5 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
@@ -9,10 +9,10 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, load_state, add_noise
-from utils.logging import SimpleLogger, WandbLogger
-from peekvit.dataset import get_imagenette
-from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.utils.utils import load_state
+from peekvit.utils.logging import SimpleLogger, WandbLogger
+from peekvit.data.dataset import get_imagenette
+from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
 torch.manual_seed(0)
@@ -86,7 +86,7 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
 
         # visualize predictions
         if num_images > 0:
-            from visualize import img_mask_distribution
+            from peekvit.utils.visualize import img_mask_distribution
             img_mask_distribution(model, 
                         val_dataset,
                         torch.arange(0, 4000, 4000//num_images), 
@@ -99,7 +99,7 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
                         )
 
     # log accuracy vs budget
-    from visualize import plot_budget_vs_acc
+    from peekvit.utils.visualize import plot_budget_vs_acc
     fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
     if validation_args['save_images_to_wandb']:
         logger.log({'val_accuracy_vs_budget': fig})

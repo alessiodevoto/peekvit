@@ -1,5 +1,5 @@
 import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
@@ -9,10 +9,10 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, save_state, load_state
-from utils.logging import SimpleLogger, WandbLogger
-from peekvit.dataset import get_imagenette
-from models.models import build_model
+from peekvit.utils.utils import make_experiment_directory, save_state, load_state
+from peekvit.utils.logging import SimpleLogger, WandbLogger
+from peekvit.data.dataset import get_imagenette
+from peekvit.models.models import build_model
 
 from torchvision.models.vision_transformer import ViT_B_16_Weights
 

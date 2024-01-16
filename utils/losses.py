@@ -1,5 +1,5 @@
 import torch
-from utils.utils import get_model_device, get_forward_masks
+from .utils import get_model_device, get_forward_masks
 from einops import reduce
 from torch.nn.functional import cross_entropy, relu
 from torch.special import entr

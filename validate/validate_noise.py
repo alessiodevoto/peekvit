@@ -12,10 +12,12 @@ import argparse
 
 
 
-from utils.utils import make_experiment_directory, load_state, add_noise
-from utils.logging import SimpleLogger, WandbLogger
-from peekvit.dataset import get_imagenette
-from dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.utils.utils import make_experiment_directory, load_state, add_noise
+from peekvit.utils.logging import SimpleLogger, WandbLogger
+from peekvit.data.dataset import get_imagenette
+from peekvit.utils.visualize import plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc
+
+from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
 torch.manual_seed(0)
@@ -184,7 +186,6 @@ if __name__ == '__main__':
         all_results_per_flops[load_from] = flops_results
     
     
-    from visualize import plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc
 
     fig = plot_model_budget_vs_noise_vs_acc(all_results_per_budget, save_dir=f'{store_to}/images/' if validation_args['save_images_locally'] else None)
     
