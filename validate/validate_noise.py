@@ -26,19 +26,11 @@ torch.manual_seed(0)
 # PATHS 
 # all images, checkpoints and logs will be saved to base path in a structured way
 DATASET_ROOT = '/home/aledev/projects/moe-workspace/data/imagenette'
-BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs' 
 
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-
-validation_args = {
-    'eval_batch_size': 64,
-    'num_workers': 4,
-    'save_images_locally': True,
-    'save_images_to_wandb': False,
-}
 
 
 
@@ -51,20 +43,18 @@ def validate_with_noise(
     noise_type=None,
     noise_layer=None,
     noise_vals=None, 
-    budgets=None):
+    budgets=None,
+    eval_batch_size: int = 64
+    ):
 
-    # logging
-    if validation_args['save_images_to_wandb']:
-        logger = WandbLogger(wandb_run_dir=run_dir)
-    else:
-        # create run directory and logger 
-        logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
-        logger.log(f'Experiment name: {run_dir}')
+    
+    logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
+    logger.log(f'Experiment name: {run_dir}')
 
 
     # dataset and dataloader
     _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
-    val_loader = DataLoader(val_dataset, batch_size=validation_args['eval_batch_size'], shuffle=False, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, pin_memory=True)
 
     
     # get checkpoint and load model
@@ -150,17 +140,25 @@ def validate_with_noise(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
-    parser.add_argument('--load_from', nargs='+', default=None)
-    parser.add_argument('--epoch', type=str, default=None)
-    parser.add_argument('--budgets', nargs='*', default=None)
-    parser.add_argument('--probs', nargs='*', default=None)
-    parser.add_argument('--snrs', nargs='*', default=None)
-    parser.add_argument('--noise_layer', type=int, default=2)
+    parser.add_argument('--load_from', type=str, default=None, help='Path to the experiment directory containing the checkpoint')
+    parser.add_argument('--epoch', type=str, default=None, help='Epoch to load from. If None, the last checkpoint is loaded.')
+    parser.add_argument('--budgets', nargs='+', required=True, help='Budgets to validate with.')
+    parser.add_argument('--probs', nargs='*', default=None, help='Probabilities of token dropping noise to validate with.')
+    parser.add_argument('--snrs', nargs='*', default=None, help='SNRs of gaussian noise to validate with.')
+    parser.add_argument('--noise_layer', type=int, default=2, help='Layer to add noise to.')
+    parser.add_argument('--store_locally', action='store_true', help='If true, images are saved locally.')
+    parser.add_argument('--store_wandb', action='store_true', help='If true, images are saved to Wandb.')
+    parser.add_argument('--eval_bs', type=int, default=64, help='Evaluation batch size.')
 
     args = parser.parse_args()
 
-    # store_to, exp_name = make_experiment_directory(BASE_PATH, is_eval=True)
-    store_to = join(args.load_from[0], 'eval_noise')
+    if not args.store_locally and not args.store_wandb:
+        raise ValueError('At least one of store_locally or store_wandb must be true.')
+
+    # create directory to store results, in the load_from directory
+    store_to = join(args.load_from, 'eval')
+
+    # convert args to floats
     budgets = [float(b) for b in args.budgets] if args.budgets else [None]
     probs = [float(p) for p in args.probs] if args.probs else None
     snrs = [float(s) for s in args.snrs] if args.snrs else None
@@ -187,7 +185,9 @@ if __name__ == '__main__':
     
     
 
-    fig = plot_model_budget_vs_noise_vs_acc(all_results_per_budget, save_dir=f'{store_to}/images/' if validation_args['save_images_locally'] else None)
-    
-    fig = plot_model_noise_vs_budget_vs_acc(all_results_per_flops, additional_x_labels=budgets, save_dir=f'{store_to}/images/' if validation_args['save_images_locally'] else None)
+    budet_vs_acc = plot_model_budget_vs_noise_vs_acc(all_results_per_budget, save_dir=f'{store_to}/images/' if args.store_locally else None)
+    flop_vs_acc = plot_model_noise_vs_budget_vs_acc(all_results_per_flops, additional_x_labels=budgets, save_dir=f'{store_to}/images/' if args.store_locally else None)
 
+    if args.store_wandb:
+        logger = WandbLogger(wandb_run_dir=store_to)
+        logger.log({'val_accuracy_vs_budget': budet_vs_acc, 'val_accuracy_vs_flops': flop_vs_acc})

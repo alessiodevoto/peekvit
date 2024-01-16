@@ -21,26 +21,28 @@ torch.manual_seed(0)
 # PATHS 
 # all images, checkpoints and logs will be saved to base path in a structured way
 DATASET_ROOT = '/home/aledev/projects/moe-workspace/data/imagenette'
-BASE_PATH = '/home/aledev/projects/peekvit-workspace/peekvit/runs' 
 
 # HYPERPARAMETERS 
 # defined here as this is a quick experiment
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-validation_args = {
-    'eval_batch_size': 64,
-    'num_workers': 4,
-    'save_images_locally': True,
-    'save_images_to_wandb': False,
-}
 
 
 @torch.no_grad()
-def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
+def validate(
+    run_dir, 
+    num_images, 
+    load_from=None, 
+    epoch=None, 
+    budgets=None,
+    store_locally: bool = True,
+    store_wandb: bool = False,
+    eval_batch_size: int = 64
+    ):
 
     # logging
-    if validation_args['save_images_to_wandb']:
+    if store_wandb:
         logger = WandbLogger(wandb_run_dir=run_dir)
     else:
         # create run directory and logger 
@@ -50,7 +52,7 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
 
     # dataset and dataloader
     _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
-    val_loader = DataLoader(val_dataset, batch_size=validation_args['eval_batch_size'], shuffle=False, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, pin_memory=True)
 
     
     # get last checkpoint in the load_from directory
@@ -92,16 +94,16 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
                         torch.arange(0, 4000, 4000//num_images), 
                         model_transform = None,
                         visualization_transform=IMAGENETTE_DENORMALIZE_TRANSFORM,
-                        save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if validation_args['save_images_locally'] else None,
+                        save_dir=f'{run_dir}/images/epoch_{epoch}_budget{budget}' if store_locally else None,
                         hard=True,
                         budget=budget,
-                        log_to_wandb=validation_args['save_images_to_wandb'],
+                        log_to_wandb=store_wandb,
                         )
 
     # log accuracy vs budget
     from peekvit.utils.visualize import plot_budget_vs_acc
-    fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if validation_args['save_images_locally'] else None)
-    if validation_args['save_images_to_wandb']:
+    fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=f'{run_dir}/images/epoch_{epoch}_budgets' if store_locally else None)
+    if store_wandb:
         logger.log({'val_accuracy_vs_budget': fig})
 
 
@@ -109,19 +111,28 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--load_from', type=str, default=None)
-    parser.add_argument('--epoch', type=str, default=None)
-    parser.add_argument('--budgets', nargs='+', required=True)
-    parser.add_argument('--num_images', type=int, default=10)
+    parser.add_argument('--load_from', type=str, default=None, help='Path to the experiment directory containing the checkpoint')
+    parser.add_argument('--epoch', type=str, default=None, help='Epoch to load from. If None, the last checkpoint is loaded.')
+    parser.add_argument('--budgets', nargs='+', required=True, help='Budgets to validate with.')
+    parser.add_argument('--num_images', type=int, default=10, help='Number of images to visualize predictions for.')
+    parser.add_argument('--store_locally', action='store_true', help='If true, images are saved locally.')
+    parser.add_argument('--store_wandb', action='store_true', help='If true, images are saved to Wandb.')
+    parser.add_argument('--eval_bs', type=int, default=64, help='Evaluation batch size.')
 
     args = parser.parse_args()
+
+    if not args.store_locally and not args.store_wandb:
+        raise ValueError('At least one of store_locally and store_wandb must be true.')
+
     store_to = join(args.load_from, 'eval')
 
     validate(store_to, 
-             load_from=args.load_from, 
-             num_images=args.num_images, 
-             epoch=args.epoch, 
-             budgets=[float(b) for b in args.budgets]
-             )
+            load_from=args.load_from, 
+            num_images=args.num_images, 
+            epoch=args.epoch, 
+            budgets=[float(b) for b in args.budgets],
+            store_locally=args.store_locally,
+            store_wandb=args.store_wandb,
+            )
     
 
