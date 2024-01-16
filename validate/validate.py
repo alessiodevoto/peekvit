@@ -38,7 +38,8 @@ def validate(
     budgets=None,
     store_locally: bool = True,
     store_wandb: bool = False,
-    eval_batch_size: int = 64
+    eval_batch_size: int = 64,
+    image_size: int = 160
     ):
 
     # logging
@@ -51,7 +52,7 @@ def validate(
 
 
     # dataset and dataloader
-    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
+    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, image_size=image_size)
     val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, pin_memory=True)
 
     
@@ -115,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=str, default=None, help='Epoch to load from. If None, the last checkpoint is loaded.')
     parser.add_argument('--budgets', nargs='+', required=True, help='Budgets to validate with.')
     parser.add_argument('--num_images', type=int, default=10, help='Number of images to visualize predictions for.')
+    parser.add_argument('--image_size', type=int, default=160, help='Image size to use for the dataset.')
     parser.add_argument('--store_locally', action='store_true', help='If true, images are saved locally.')
     parser.add_argument('--store_wandb', action='store_true', help='If true, images are saved to Wandb.')
     parser.add_argument('--eval_bs', type=int, default=64, help='Evaluation batch size.')
@@ -133,6 +135,7 @@ if __name__ == '__main__':
             budgets=[float(b) for b in args.budgets],
             store_locally=args.store_locally,
             store_wandb=args.store_wandb,
+            image_size=args.image_size
             )
     
 

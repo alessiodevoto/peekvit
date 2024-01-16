@@ -44,7 +44,8 @@ def validate_with_noise(
     noise_layer=None,
     noise_vals=None, 
     budgets=None,
-    eval_batch_size: int = 64
+    eval_batch_size: int = 64,
+    image_size: int = 160
     ):
 
     
@@ -53,7 +54,7 @@ def validate_with_noise(
 
 
     # dataset and dataloader
-    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
+    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, image_size=image_size)
     val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, pin_memory=True)
 
     
@@ -141,6 +142,7 @@ def validate_with_noise(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A simple program with two arguments.')
     parser.add_argument('--load_from', type=str, default=None, help='Path to the experiment directory containing the checkpoint')
+    parser.add_argument('--image_size', type=int, default=160, help='Image size to use for the dataset.')
     parser.add_argument('--epoch', type=str, default=None, help='Epoch to load from. If None, the last checkpoint is loaded.')
     parser.add_argument('--budgets', nargs='+', required=True, help='Budgets to validate with.')
     parser.add_argument('--probs', nargs='*', default=None, help='Probabilities of token dropping noise to validate with.')
@@ -179,6 +181,7 @@ if __name__ == '__main__':
                         budgets=budgets,
                         noise_type= 'gaussian' if args.snrs else 'token_drop',
                         noise_vals=snrs if args.snrs else probs,
+                        image_size=args.image_size,
                         )
         all_results_per_budget[load_from] = budget_results
         all_results_per_flops[load_from] = flops_results

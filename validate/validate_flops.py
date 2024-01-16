@@ -39,7 +39,8 @@ def validate_flops(
     n_exit=-1,
     save_images_locally: bool = True,
     save_images_to_wandb: bool = False,
-    eval_batch_size: int = 64
+    eval_batch_size: int = 64,
+    image_size: int = 160
     ):
 
 
@@ -48,7 +49,7 @@ def validate_flops(
 
 
     # dataset and dataloader
-    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT)
+    _, val_dataset, _, _ = get_imagenette(root=DATASET_ROOT, image_size=image_size)
     val_loader = DataLoader(val_dataset, batch_size=eval_batch_size, shuffle=False, pin_memory=True)
     
     # get last checkpoint in the load_from directory
@@ -129,6 +130,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--load_from', type=str, default=None, help='Path to the experiment directory containing the checkpoint')
     parser.add_argument('--epoch', type=str, default=None, help='Epoch to load from. If None, the last checkpoint is loaded.')
+    parser.add_argument('--image_size', type=int, default=160, help='Image size to use for the dataset.')
     parser.add_argument('--budgets', nargs='+', required=True, help='Budgets to validate with.')
     parser.add_argument('--n_exit', type=int, default=-1, help='Early exit to validate with. If -1, the last exit is used.')
     parser.add_argument('--store_locally', action='store_true', help='If true, images are saved locally.')
@@ -151,7 +153,8 @@ if __name__ == '__main__':
             n_exit=args.n_exit,
             save_images_locally=args.store_locally,
             save_images_to_wandb=args.store_wandb,
-            eval_batch_size=args.eval_bs
+            eval_batch_size=args.eval_bs,
+            image_size=args.image_size
             )
     
 
