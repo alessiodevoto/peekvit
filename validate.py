@@ -76,7 +76,7 @@ def validate(run_dir, num_images, load_from=None, epoch=None, budgets=None):
             if hasattr(model, 'set_budget'):
                 model.set_budget(budget)
             out = model(batch)
-            _, predicted = torch.max(out.data, 1)
+            _, predicted = torch.max(out.data, 1) if isinstance(out, torch.Tensor) else torch.max(out[-1].data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
         acc = correct / total

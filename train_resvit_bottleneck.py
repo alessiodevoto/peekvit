@@ -14,7 +14,7 @@ from utils.utils import make_experiment_directory, save_state, load_state, train
 from utils.logging import WandbLogger, SimpleLogger
 from models.models import build_model
 from utils.topology import reinit_class_tokens
-from utils.adapters import from_vit_to_residual_vit
+from peekvit.models.adapters import from_vit_to_residual_vit
 from utils.utils import add_noise
 from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 from peekvit.dataset import get_imagenette
@@ -60,12 +60,12 @@ model_class = 'ResidualVisionTransformer'
 model_args = {} # we use a pretrained model, so we do not need to specify the model args
 
 gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
     'gate_temp': 1,
     'add_input': False,
     'gate_type': 'sigmoid',
     'gate_threshold': 0.5,
-    'gate_bias': 3,
+    'gate_bias': 1,
     'add_budget_token': 'learnable' #'learnable_interpolate' # this can be either True (sample bugdet from a uniform distribution) or a float (constant budget) or list of floats (sample budget from this list)
 }
 
@@ -87,8 +87,8 @@ training_args = {
 additional_losses_args = {
     'solo_mse' : {
         'budget': 'budget_token', 
-        'strict': False,
-        'weight': 0.1,
+        'strict': True,
+        'weight': 0.5,
         },
     }
 
@@ -193,7 +193,7 @@ def train(run_dir, load_from=None, exp_name=None):
             loss.backward()
             optimizer.step()
             
-            logger.log(regularization_losses | {'train_loss': loss.item(), 'train_main_loss': main_loss.item()})
+            logger.log({f'train/{loss_name}': val.item() for loss_name, val in regularization_losses.items()} | {'train/total_loss': loss.item(), 'train/classification_loss': main_loss.item()})
 
 
     @torch.no_grad()
@@ -217,7 +217,7 @@ def train(run_dir, load_from=None, exp_name=None):
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
             acc = correct / total
-            logger.log({f'val_accuracy/budget_{budget}': acc})
+            logger.log({f'val/accuracy_budget_{budget}': acc})
             accs.append(acc)
 
 
@@ -238,7 +238,7 @@ def train(run_dir, load_from=None, exp_name=None):
         # log accuracy vs budget
         from visualize import plot_budget_vs_acc
         val_accuracy_vs_budget_fig = plot_budget_vs_acc(budgets, accs, epoch=epoch, save_dir=None)
-        logger.log({'val_accuracy_vs_budget': val_accuracy_vs_budget_fig})
+        logger.log({'val/val_accuracy_vs_budget': val_accuracy_vs_budget_fig})
             
     
 

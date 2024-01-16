@@ -5,7 +5,6 @@ import os
 from datetime import datetime
 from os.path import join
 from models.models import build_model
-from pprint import pprint
 
 
 def make_experiment_directory(base_path, is_eval:bool=False):

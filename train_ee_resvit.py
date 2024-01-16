@@ -15,7 +15,7 @@ from utils.utils import make_experiment_directory, save_state, load_state, train
 from utils.logging import WandbLogger, SimpleLogger
 from models.models import build_model
 from utils.topology import reinit_class_tokens
-from utils.adapters import from_vit_to_eeresidual_vit
+from peekvit.models.adapters import from_vit_to_eeresidual_vit
 from utils.utils import add_noise
 from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 from peekvit.dataset import get_imagenette

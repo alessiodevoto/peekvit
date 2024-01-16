@@ -13,8 +13,8 @@ import random
 from utils.utils import make_experiment_directory, save_state, load_state, train_only_these_params
 from utils.logging import WandbLogger, SimpleLogger
 from models.models import build_model
-from utils.topology import add_residual_gates, reinit_class_tokens
-from utils.adapters import from_vit_to_residual_vit
+from utils.topology import reinit_class_tokens
+from peekvit.models.adapters import from_vit_to_residual_vit, from_torch_vit_to_residual_vit
 from utils.utils import add_noise
 from peekvit.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
 from peekvit.dataset import get_imagenette
@@ -57,10 +57,20 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model_class = 'ResidualVisionTransformer'
 
-model_args = {} # we use a pretrained model, so we do not need to specify the model args
+vit_args = {
+    'image_size':224,
+    'patch_size':16,
+    'num_layers':12,
+    'num_heads':12,
+    'hidden_dim':768,
+    'mlp_dim':3072,
+    'num_classes':10,
+} # if we use a pretrained model, so we do not need to specify the model args
+
+
 
 gate_args = {
-    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
+    'residual_layers': ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'],
     #'residual_layers': ['attention+mlp', 'attention+mlp', None, None],
     'gate_temp': 1,
     'add_input': False,
@@ -87,6 +97,7 @@ training_args = {
     'save_images_locally': False,
     'save_images_to_wandb': True,
     }
+
 
 
 
@@ -122,8 +133,9 @@ def train(run_dir, load_from=None, exp_name=None):
         load_from = join(load_from, last_checkpoint)
         print(f'Loading model from {load_from}')
         checkpoint_model_class = torch.load(load_from)['model_class']
+        print(f'Checkpoint model class: {checkpoint_model_class}')
         if checkpoint_model_class == 'VisionTransformer':
-            model, model_args = from_vit_to_residual_vit(load_from, gate_args)
+            model, model_args = from_vit_to_residual_vit(load_from, gate_args, vit_args)
         elif checkpoint_model_class == 'ResidualVisionTransformer':
             model, _, _, model_args, _ = load_state(load_from, model=None, optimizer=None)
     else:

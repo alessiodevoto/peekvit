@@ -38,7 +38,7 @@ validation_args = {
 
 
 @torch.no_grad()
-def validate_flops(run_dir, load_from=None, epoch=None, budgets=None):
+def validate_flops(run_dir, load_from=None, epoch=None, budgets=None, n_exit=-1):
 
 
     logger = SimpleLogger(join(run_dir, 'val_logs.txt'))
@@ -72,7 +72,8 @@ def validate_flops(run_dir, load_from=None, epoch=None, budgets=None):
             if hasattr(model, 'set_budget'):
                 model.set_budget(budget)
             out = model(batch)
-            _, predicted = torch.max(out.data, 1)
+            # TODO explain why we are taking the last output (it's early exit)
+            _, predicted = torch.max(out.data, 1) if isinstance(out, torch.Tensor) else torch.max(out[n_exit].data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
         acc = correct / total
@@ -128,6 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_from', type=str, default=None)
     parser.add_argument('--epoch', type=str, default=None)
     parser.add_argument('--budgets', nargs='+', required=True)
+    parser.add_argument('--n_exit', type=int, default=-1)
 
     args = parser.parse_args()
     store_to = join(args.load_from, 'eval')
@@ -135,7 +137,8 @@ if __name__ == '__main__':
     validate_flops(store_to, 
              load_from=args.load_from, 
              epoch=args.epoch, 
-             budgets=[float(b) for b in args.budgets]
+             budgets=[float(b) for b in args.budgets],
+             n_exit=args.n_exit
              )
     
 
