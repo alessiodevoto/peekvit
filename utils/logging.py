@@ -6,11 +6,11 @@ class SimpleLogger:
     """
     Simple logger for logging to stdout and to a file.
     """
-    def __init__(self, log_file_path):
-        self.log_file_path = log_file_path
-        if not os.path.exists(os.path.dirname(log_file_path)):
-            os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
-        self.log_file = open(log_file_path, 'a+')
+    def __init__(self, dir, settings=None):
+        self.log_file_path = os.path.join(dir, 'log.txt')
+        os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
+        self.log_file = open(self.log_file_path, 'a+')
+        self.log(settings)
     
     def log(self,  *args, **kwargs):
         
@@ -26,18 +26,18 @@ class WandbLogger:
     """
     Logger for logging to wandb.
     """
-    def __init__(self, entity, project, config, wandb_run=None, wandb_run_dir=None):
-        self.entity = entity
-        self.project = project
+    def __init__(self, wandb_entity, wandb_project, settings=None, wandb_run=None, dir=None):
+        self.entity = wandb_entity
+        self.project = wandb_project
         self.wandb_run = wandb_run
-        self.config = config
+        self.config = settings
 
         wandb.init(
-            entity=entity,
-            project=project,
-            config=config,
+            entity=wandb_entity,
+            project=wandb_project,
+            config=settings,
             name=wandb_run,
-            dir=wandb_run_dir
+            dir=dir
         )
     
     def log(self, dict_to_log):

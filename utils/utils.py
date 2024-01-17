@@ -171,8 +171,8 @@ def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optim
     os.makedirs(path, exist_ok=True)
     state = {
         'model_class': model.__class__.__name__,
-        'noise_args': noise_args,
-        'model_args': model_args,
+        'noise_args': dict(noise_args) if noise_args else None,
+        'model_args': dict(model_args) if model_args else None,
         'state_dict': model.state_dict(),
         'optimizer': optimizer.state_dict() if not skip_optimizer else None,
         'epoch': epoch

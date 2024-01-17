@@ -6,13 +6,12 @@ import re
 
 
 @torch.no_grad()
-def from_vit_to_residual_vit(vit_checkpoint, residual_vit_args:dict = None, model_args:dict = None):
+def from_vit_to_residual_vit(vit_checkpoint, model_args:dict = None):
     """
     Converts a Vision Transformer (ViT) checkpoint to a Residual Vision Transformer (ResidualViT) model.
 
     Args:
         vit_checkpoint (str): Path to the ViT checkpoint file.
-        residual_vit_args (dict, optional): Additional arguments to initialize the ResidualViT model. Defaults to None.
         model_args (dict, optional): Arguments to initialize the ResidualViT model. Defaults to None. If None, the arguments from the checkpoint are used.
 
     Returns:
@@ -27,19 +26,16 @@ def from_vit_to_residual_vit(vit_checkpoint, residual_vit_args:dict = None, mode
     checkpoint_model_args = state['model_args']
 
     model_args = model_args if model_args is not None else checkpoint_model_args
-    model_args.pop('pretrained', None)
 
     # build residual vit, with randomly init weights
-    residual_vit = ResidualVisionTransformer(**model_args, **residual_vit_args)
+    residual_vit = ResidualVisionTransformer(**model_args)
 
     # copy weights from vit to residual vit
     res = residual_vit.load_state_dict(vit_weights, strict=False)
 
     print('Some parameters are not present in the checkpoint and will be randomly initialized: ', res[0])
 
-    model_args.update(residual_vit_args)
-        
-    return residual_vit, model_args
+    return residual_vit
 
 
 
