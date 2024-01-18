@@ -8,21 +8,22 @@ from os.path import join
 from peekvit.models.models import build_model
 
 
-def make_experiment_directory(base_path, is_eval:bool=False):
+def make_experiment_directory(dir_path):
     """
-    Creates a new directory for an experiment based on the current date and time.
+    Create an experiment directory with subdirectories for checkpoints.
+
     Args:
-        base_path (str): The base path where the experiment directory will be created.
-        is_eval (bool): Whether this is an evaluation experiment or not. 
+        dir_path (str): The path of the experiment directory.
+
     Returns:
-        str: The path of the newly created experiment directory.
-        str: The formatted date and time of the experiment, i.e. the experiment name.
+        str: The path of the created experiment directory.
     """
-    now = datetime.now()
-    formatted_date_time = now.strftime("%Y_%m_%d_%H_%M_%S") + '_eval' if is_eval else now.strftime("%Y_%m_%d_%H_%M_%S")
-    exp_dir = join(base_path, formatted_date_time)
-    os.makedirs(exp_dir, exist_ok=True)
-    return exp_dir, formatted_date_time
+    os.makedirs(dir_path, exist_ok=True)
+
+    checkpoints_dir = join(dir_path, 'checkpoints')
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    
+    return dir_path, checkpoints_dir
 
 
 def make_batch(x: torch.Tensor):
@@ -196,7 +197,18 @@ def load_state(path, model=None, optimizer=None):
     if model is None:
         # create model based on saved state
         model = build_model(state['model_class'], state['model_args'], state['noise_args'])
-    model.load_state_dict(state['state_dict'])
+    
+    try:
+        res = model.load_state_dict(state['state_dict'], strict=False)
+        if len(res[0]) > 0:
+            print('Some parameters are not present in the checkpoint and will be randomly initialized: ', res[0])
+    except RuntimeError as e:
+        print(e)
+        print('The model state dict could not be loaded. This is probably because the checkpoint has a different architecture.')
+        print('Checkpoint class: ', state['model_class'])
+        print('Model class: ', model.__class__.__name__)
+        print('Checkpoint args: ', state['model_args'])
+        
 
     if optimizer is not None:
         optimizer.load_state_dict(state['optimizer'])
@@ -205,26 +217,19 @@ def load_state(path, model=None, optimizer=None):
 
 
 
+def get_last_checkpoint_path(experiment_dir):
+    """
+    Get the path of the last checkpoint in the experiment directory.
 
-######################################################## Mix ##################################################################
+    Args:
+        experiment_dir (str): The directory path where the experiment is stored.
 
-# map imagenette to imagenet classes via a transform
-class ImagenetToImagenetteLabel(object):
-    def __init__(self):
-        super().__init__()
-        self.mapping = {
-            0: 0,       # tench
-            1: 217,     # english springer
-            2: 482,     # cassette player
-            3: 491,     # chainsaw
-            4: 497,     # church
-            5: 566,     # french horn
-            6: 569,     # garbage
-            7: 571,     # gas
-            8: 574,     # golf ball
-            9: 701,     # parachute
-        }
-
-    def __call__(self, label):
-        return self.mapping[label]
+    Returns:
+        str: The path of the last checkpoint in the experiment directory.
+    """
+    print('Loading last checkpoint from experiment directory: ', experiment_dir)
+    checkpoints_dir = join(experiment_dir, 'checkpoints')
+    last_checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
+    return join(checkpoints_dir, last_checkpoint)
+    
 

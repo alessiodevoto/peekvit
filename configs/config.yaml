@@ -22,7 +22,7 @@ hydra:
 
 device: 'cuda:0'
 seed: 0
-load_from: 
+load_from: '/home/aledev/projects/peekvit-workspace/peekvit/runs/2024-01-17-18-31-37'
 
 
 logger:

@@ -7,8 +7,7 @@ from tqdm import tqdm
 from os.path import join
 import argparse
 
-from peekvit.utils.utils import make_experiment_directory, save_state, load_state
-from peekvit.utils.logging import SimpleLogger, WandbLogger
+from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
 from peekvit.data.dataset import Imagenette
 
 import hydra
@@ -28,13 +27,14 @@ def train(cfg: DictConfig):
     exp_name = cfg.experiment_name
     device = torch.device(cfg.device)
     experiment_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
     
+    # path to checkpoint to load from or None
     load_from = cfg.load_from
 
     training_args = cfg.training
     
-    os.makedirs(experiment_dir, exist_ok=True)
-    checkpoints_dir = join(experiment_dir, 'checkpoints')
+    
 
     # logger
     config_dict = OmegaConf.to_container(cfg, resolve=True)
@@ -51,20 +51,13 @@ def train(cfg: DictConfig):
     model = instantiate(cfg.model)
     model.to(device)
 
-    # load from checkpoint
-    # we have 2 different cases:
-    # 1. load from a checkpoint of the same model class
-    # 2. load from a checkpoint of a different model class
-    # in the first case, we can just load the state dict
-    # in the second case, we need to load the state dict and do some additional operations
-    print(load_from)
+    # load from checkpoint if requested
     if load_from is not None:
-        print(cfg.model._target_, model.__class__.__name__)
-        model_checkpoint, _, epoch, _, noise_args = load_state(load_from)
-        print('Loading model from checkpoint of class: ', model_checkpoint.__class__.__name__)
-        model.load_state_dict(model_checkpoint.state_dict(), strict=False)
-
-
+        # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
+        load_from = load_from if load_from.endswith('.pth') else get_last_checkpoint_path(load_from)
+        print('Loading model from checkpoint: ', load_from)
+        model, _, _, _, _ = load_state(load_from, model=model)
+        
 
     # losses 
     main_criterion = instantiate(cfg.main_criterion)
@@ -75,6 +68,7 @@ def train(cfg: DictConfig):
     # training
     optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
 
+    # training loop
     def train_epoch(model, loader, optimizer, epoch):
         model.train()
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
@@ -88,7 +82,7 @@ def train(cfg: DictConfig):
             
             logger.log({'train/loss': main_loss.detach().item()})
 
-
+    # validation loop
     @torch.no_grad()
     def validate_epoch(model, loader, epoch):
         model.eval()
@@ -98,7 +92,7 @@ def train(cfg: DictConfig):
             batch, labels = batch.to(device), labels.to(device)
             out = model(batch)
             val_loss = main_criterion(out, labels) 
-            _, predicted = torch.max(out, 1)
+            predicted = torch.argmax(out, 1)
             metric(predicted, labels)
             batches_loss += val_loss.detach().item()
         
