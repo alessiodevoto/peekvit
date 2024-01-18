@@ -4,18 +4,14 @@ from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
 from tqdm import tqdm
-from os.path import join
-import argparse
+import torchmetrics
+import hydra
+from omegaconf import OmegaConf, DictConfig
+from hydra.utils import instantiate
 
 from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
 from peekvit.models.topology import reinit_class_tokens
 from peekvit.utils.losses import LossCompose
-
-import hydra
-import torchmetrics
-from omegaconf import OmegaConf, DictConfig
-from hydra.utils import instantiate
-
 
 
 
@@ -30,21 +26,16 @@ def train(cfg: DictConfig):
     experiment_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
     
-    # path to checkpoint to load from or None
-    load_from = cfg.load_from
-
-    training_args = cfg.training
     
-    
-
     # logger
     config_dict = OmegaConf.to_container(cfg, resolve=True)
     from pprint import pprint
     pprint(config_dict)
-    logger = instantiate(cfg.logger, settings=tuple(config_dict), dir=experiment_dir)
+    logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
     
 
     # dataset and dataloader
+    training_args = cfg.training
     dataset = instantiate(cfg.dataset)
     train_dataset, val_dataset = dataset.train_dataset, dataset.val_dataset
     train_loader = DataLoader(train_dataset, batch_size=training_args.train_batch_size, shuffle=True, num_workers=training_args.num_workers, pin_memory=True)
@@ -55,6 +46,7 @@ def train(cfg: DictConfig):
     model.to(device)
 
     # load from checkpoint if requested
+    load_from = cfg.load_from
     if load_from is not None:
         # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
         load_from = load_from if load_from.endswith('.pth') else get_last_checkpoint_path(load_from)
@@ -71,9 +63,7 @@ def train(cfg: DictConfig):
     # we might have N additional losses
     # so we store the in a dictionary
     additional_losses = LossCompose(cfg.loss.additional_losses)
-    print(additional_losses.additional_losses)
-    
-    
+        
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
@@ -88,11 +78,12 @@ def train(cfg: DictConfig):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels) 
-            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=0.5, dict_prefix='train/')
+            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=model.current_budget, dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()
             optimizer.step()
             logger.log({'train/loss': main_loss.detach().item(), 'classification_loss': main_loss.detach().item()} | add_loss_dict)
+
 
     # validation loop
     @torch.no_grad()
@@ -118,7 +109,7 @@ def train(cfg: DictConfig):
     
 
     for epoch in range(training_args['num_epochs']+1):
-        
+
         train_epoch(model, train_loader, optimizer, epoch)
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:

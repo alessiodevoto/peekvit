@@ -367,11 +367,14 @@ class ResidualVisionTransformer(nn.Module):
             the class tokens to produce the final output.
         gate_type (Literal['gumbel', 'sigmoid'], optional): The type of gate for residual layers. Defaults to 'gumbel'.
         gate_temp (float, optional): The temperature for the gate. Defaults to 1.0.
-        gate_threshold (float, optional): The threshold for the gate. CDefaults to 0.5.
-        add_budget_token (bool, str, optional): Whether to add a budget token at the end of each sequence. It can be True to sample
-            a budget token in [0,1], a tuple-like to specify a set of budgets to sample from, a float to have a fixed budget 
-            across training, 'learnable' to add a learnable budget token and sample a value between 0 and 1 to multiply to it, and 
-            learnable interpolate to have 2 trainable budget tokens and sample a value (budget) to interpolate between them.  
+        gate_threshold (float, optional): The threshold for the gate. Defaults to 0.5.
+        add_budget_token (bool, str, optional): Whether to add a budget token at the end of each sequence. It can be:
+            - False to not add a budget token
+            - True to sample a budget token in [0,1]
+            - a tuple-like to specify a set of budgets to sample from, a float to have a fixed budget 
+            across training, 
+            - 'learnable' to add a learnable budget token and sample a value between 0 and 1 to multiply to it
+            - learnable interpolate to have 2 trainable budget tokens and sample a value (budget) to interpolate between them.  
             For now, the same budget is sampled for each batch. Defaults to False.
     """
 
@@ -395,6 +398,7 @@ class ResidualVisionTransformer(nn.Module):
         gate_temp: float = 1.0,
         gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
+        sample_budget: Union[bool, List] = False,
         add_budget_token: Union[bool, List, Literal['learnable', 'learnable_interpolate']] = False,
     ):
         super().__init__()
@@ -410,6 +414,7 @@ class ResidualVisionTransformer(nn.Module):
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
         self.budget = add_budget_token
+        self.sample_budget = sample_budget
         self.current_budget = None
         self.gate_temp = gate_temp 
         self.gate_bias = gate_bias
@@ -496,6 +501,20 @@ class ResidualVisionTransformer(nn.Module):
 
         return x
     
+    def _sample_budget(self):
+        if isinstance(self.budget, float):
+            # fixed budget
+            sampled_budget = self.budget
+        elif isinstance(self.budget, list) or isinstance(self.budget, tuple):
+            # select a random value from the possible budgets
+            idx = torch.randint(0, len(self.budget), (1,)).item()
+            sampled_budget = self.budget[idx]
+        elif self.budget == True:
+            # sample a random budget in [0,1)
+            sampled_budget = torch.rand(1).item()
+        return sampled_budget
+
+
     def _add_budget_token(self, x):
             """
             Adds a budget token to the input tensor based on the self.budget. 
@@ -521,11 +540,11 @@ class ResidualVisionTransformer(nn.Module):
                     # select a random value from the possible budgets
                     idx = torch.randint(0, len(self.budget), (1,)).item()
                     self.current_budget = self.budget[idx]
-                elif isinstance(self.budget, bool):
+                elif self.budget == True:
                     # sample a random budget in [0,1)
                     self.current_budget = torch.rand(1, device=x.device).item()
                 elif self.budget == 'learnable':
-                    # in this case we use two learnable parameters and interpolate between them with a random budget
+                    # in this case we use a single learnable parameter and multiply it by a random budget
                     self.current_budget = torch.rand(1, device=x.device).item()
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
@@ -547,18 +566,16 @@ class ResidualVisionTransformer(nn.Module):
                 return x
             
             else:
-                if not getattr(self, 'current_budget', False):
-                    raise ValueError('Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.')
+                assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
+
                 
                 if self.budget == 'learnable':
                     # in this case we use two learnable parameters and interpolate between them with a random budget
-                    assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
                     
                 elif self.budget == 'learnable_interpolate':
                     # in this case we use two learnable parameters and interpolate between them with a random budget
-                    assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
                     batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
                     batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
                     x = torch.cat([ x,

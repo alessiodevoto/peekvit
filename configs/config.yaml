@@ -17,7 +17,7 @@ experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
 device: 'cuda:0'
 seed: 0
-load_from: '/home/aledev/projects/peekvit-workspace/peekvit/runs/2024-01-17-18-31-37'
+load_from: '/home/aledev/projects/peekvit-workspace/peekvit/runs/2023_12_21_10_12_06_base'
 
 hydra:
   run:
@@ -26,13 +26,12 @@ hydra:
 
 
 defaults:
-  - logger: local
+  - logger: wandb
   - dataset: imagenette
   - model: residualvit
   - training: base
-  - loss: crossentropy_2
-  - extra_loss: null
-  - noise: null
+  - loss: crossentropy_mse
+  - noise: no_noise 
   - _self_
 
 

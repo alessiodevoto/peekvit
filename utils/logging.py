@@ -30,14 +30,15 @@ class WandbLogger:
         self.entity = wandb_entity
         self.project = wandb_project
         self.wandb_run = wandb_run
-        self.config = settings[0]
-
+        self.config = settings if isinstance(settings, dict) else eval(settings)
+        
+                
         wandb.init(
             entity=wandb_entity,
             project=wandb_project,
-            config=settings,
+            config=self.config,
             name=wandb_run,
-            dir=dir
+            dir=dir,
         )
     
     def log(self, dict_to_log):

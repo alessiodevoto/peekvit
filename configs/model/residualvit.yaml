@@ -1,11 +1,13 @@
 _target_: peekvit.models.residualvit.ResidualVisionTransformer
 image_size: 160
-patch_size: 16
+patch_size: 8
 num_classes: 10
-hidden_dim: 512
-mlp_dim: 512
+hidden_dim: 128
+mlp_dim: 378
 num_layers: 4
 num_heads: 8
+attention_dropout: 0.1
+dropout: 0.1
 residual_layers: ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'] 
 gate_temp: 1
 add_input: False

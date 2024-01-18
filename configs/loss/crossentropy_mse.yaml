@@ -6,6 +6,3 @@ additional_losses:
         _target_:  peekvit.utils.losses.MSELoss
         weight: 0.1
         strict: False
-    mse2:
-        _target_: peekvit.utils.losses.MSELoss
-        weight: 0.1
