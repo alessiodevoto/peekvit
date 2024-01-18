@@ -2,7 +2,7 @@ training:
 train_batch_size: 128
 eval_batch_size: 128
 lr: 1e-3
-num_epochs: 10
+num_epochs: 100
 eval_every: 10
 checkpoint_every: 10
 reinit_class_tokens: True
