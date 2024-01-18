@@ -392,7 +392,7 @@ def img_mask_distribution(
     model.set_budget(budget)
     out = model(make_batch(_img).to(device))
     
-    from peekvit.data.dataset import IMAGENETTE_CLASSES
+    from peekvit.data.imagenette import IMAGENETTE_CLASSES
     #print(f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}')
 
     # retrieve last forward masks

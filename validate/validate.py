@@ -11,8 +11,8 @@ import argparse
 
 from peekvit.utils.utils import load_state
 from peekvit.utils.logging import SimpleLogger, WandbLogger
-from peekvit.data.dataset import get_imagenette
-from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.data.imagenette import get_imagenette
+from peekvit.data.imagenette import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
 torch.manual_seed(0)

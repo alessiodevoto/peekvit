@@ -14,10 +14,10 @@ import argparse
 
 from peekvit.utils.utils import make_experiment_directory, load_state, add_noise
 from peekvit.utils.logging import SimpleLogger, WandbLogger
-from peekvit.data.dataset import get_imagenette
+from peekvit.data.imagenette import get_imagenette
 from peekvit.utils.visualize import plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc
 
-from peekvit.data.dataset import IMAGENETTE_DENORMALIZE_TRANSFORM
+from peekvit.data.imagenette import IMAGENETTE_DENORMALIZE_TRANSFORM
 
 
 torch.manual_seed(0)

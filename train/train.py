@@ -8,7 +8,6 @@ from os.path import join
 import argparse
 
 from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
-from peekvit.data.dataset import Imagenette
 
 import hydra
 from hydra.utils import instantiate
