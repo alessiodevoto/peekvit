@@ -1,0 +1,3 @@
+_target_: peekvit.data.imagenette.Imagenette
+root: '/home/aledev/projects/moe-workspace/data/imagenette'
+image_size: 160

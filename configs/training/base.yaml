@@ -1,0 +1,9 @@
+training:
+train_batch_size: 128
+eval_batch_size: 128
+lr: 1e-3
+num_epochs: 10
+eval_every: 1
+checkpoint_every: 1
+reinit_class_tokens: True
+num_workers: 4
