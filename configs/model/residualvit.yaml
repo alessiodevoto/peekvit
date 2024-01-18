@@ -1,4 +1,4 @@
-_target_: peekvit.models.vit.VisionTransformer
+_target_: peekvit.models.residualvit.ResidualVisionTransformer
 image_size: 160
 patch_size: 16
 num_classes: 10
@@ -6,3 +6,10 @@ hidden_dim: 512
 mlp_dim: 512
 num_layers: 4
 num_heads: 8
+residual_layers: ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'] 
+gate_temp: 1
+add_input: False
+gate_type: 'sigmoid'
+gate_threshold: 0.5
+gate_bias: 1
+add_budget_token: 'learnable' 

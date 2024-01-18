@@ -12,30 +12,29 @@
 #
 
 workspace: '/home/aledev/projects/peekvit-workspace/peekvit'
-experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 experiments_dir: '${workspace}/runs/'
-
-hydra:
-  run:
-    dir: '${experiments_dir}/${experiment_name}/'
+experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
 device: 'cuda:0'
 seed: 0
 load_from: '/home/aledev/projects/peekvit-workspace/peekvit/runs/2024-01-17-18-31-37'
 
+hydra:
+  run:
+    dir: '${experiments_dir}/${experiment_name}/'
+
 
 
 defaults:
-  - logger: wandb
+  - logger: local
   - dataset: imagenette
-  - model: visiontransformer
+  - model: residualvit
   - training: base
+  - loss: crossentropy_2
+  - extra_loss: null
+  - noise: null
+  - _self_
 
-
-main_criterion:
-  _target_: torch.nn.CrossEntropyLoss
-
-noise: null
 
 
 

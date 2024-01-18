@@ -1,3 +1,5 @@
+from collections import defaultdict
+from omegaconf import OmegaConf,DictConfig
 import torch
 from .utils import get_model_device, get_forward_masks
 from einops import reduce
@@ -5,6 +7,7 @@ from torch.nn.functional import cross_entropy, relu
 from torch.special import entr
 from abc import ABC, abstractmethod
 from typing import List, Literal
+from hydra.utils import instantiate
 
 
 
@@ -204,12 +207,13 @@ class L1Loss(ResidualModelLoss):
         # if batch is not None and a budget was not provided, compute the budget from the batch
         return solo_l1(model, budget or self.budget)
 
+
 class MSELoss(ResidualModelLoss):
     """
     Computes the MSE loss of the model.
     """
 
-    def __init__(self, budget: float, strict: bool = False, skip_layers : List = [], **kwargs) -> None:
+    def __init__(self, budget: float = None, strict: bool = False, skip_layers : List = [], **kwargs) -> None:
         super().__init__()
         self.budget = budget
         self.strict = strict
@@ -226,6 +230,7 @@ class MSELoss(ResidualModelLoss):
         Returns:
             torch.Tensor: The MSE loss.
         """
+        assert budget or self.budget, 'budget must be provided either as argument or as class attribute'
         
         return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
 
@@ -265,42 +270,65 @@ class AlwaysZeroLoss(ResidualModelLoss):
         return torch.tensor(0.0), torch.tensor(0.0)
 
 
-LOSSES_MAP = {
-    'sparsity_per_block': SparsityLoss,
-    'entropy': EntropyLoss,
-    'solo_l1': L1Loss,
-    'solo_mse': MSELoss, 
-    'l1_and_intraentropy': L1AndIntraEntropyLoss
-}
-
-
-def get_loss(loss_type, loss_args):
+class LossCompose:
     """
-    Retrieves the loss function with the given type and arguments.
+    A class that composes multiple loss functions together.
 
     Args:
-        loss_type (str): The type of the loss function.
-        loss_args (dict): The arguments of the loss function.
+        losses_dict (dict): A dictionary containing the loss functions and their arguments.
+        Notice that each element in the dictionary must be a dictionary containing 
+        at least the key _target_ that points to a class that can be instantiated by hydra. 
 
-    Returns:
-        callable: The loss function.
+    Attributes:
+        additional_losses (defaultdict): A dictionary that stores the additional losses with their weights and loss functions.
+
+    Methods:
+        compute: Computes the total loss by evaluating each additional loss function.
+
     """
-    if loss_type is None:
-        return AlwaysZeroLoss()
-    if loss_type not in LOSSES_MAP:
-        raise ValueError(f'Loss type must be one of {LOSSES_MAP.keys()}')
 
-    return LOSSES_MAP[loss_type](**loss_args)
+    def __init__(self, losses_dict):
+        """
+        Initializes the LossCompose object.
+
+        Args:
+            losses_dict (dict): A dictionary containing the loss functions and their arguments.
+
+        """
+        if isinstance(losses_dict, DictConfig):
+            losses_dict = OmegaConf.to_container(losses_dict, resolve=True)
+
+        self.additional_losses = defaultdict(dict)  
+        for loss, loss_args in losses_dict.items():
+            self.additional_losses[loss]['weight'] = loss_args.pop('weight', 1.)
+            self.additional_losses[loss]['loss_fn'] = instantiate(loss_args)
+        
+
+    def compute(self, model, dict_prefix='', return_dict=True, **kwargs):
+        """
+        Computes the total loss by evaluating each additional loss function.
+
+        Args:
+            model: The model used for computing the loss.
+            dict_prefix (str): A prefix to be added to the loss names in the losses_dict.
+            return_dict (bool): Whether to return the losses_dict along with the total loss.
+            **kwargs: Additional keyword arguments to be passed to the loss functions.
+
+        Returns:
+            total_loss: The computed total loss.
+            (optional) losses_dict: A dictionary containing the individual losses and their values. 
+
+        """
+        losses_dict = {}
+        total_loss = []
+        for loss, loss_args in self.additional_losses.items():
+            l = loss_args['loss_fn'](model, **kwargs) * loss_args['weight']
+            losses_dict[f'{dict_prefix}{loss}'] = l.detach().item()
+            total_loss.append(l)
+        total_loss = torch.stack(total_loss).sum()
+        if return_dict:
+            return losses_dict, total_loss
+        else:
+            return total_loss
 
 
-def get_losses(losses):
-    """
-    Retrieves the loss functions with the given types and arguments.
-
-    Args:
-        losses (dict): The types and arguments of the loss functions.
-
-    Returns:
-        list: A dict containing the loss functions.
-    """
-    return {f'{loss_type}': get_loss(loss_type, loss_args) for loss_type, loss_args in losses.items()}, {f'{loss_type}': loss_args['weight'] for loss_type, loss_args in losses.items()}

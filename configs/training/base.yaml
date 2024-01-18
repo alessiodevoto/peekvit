@@ -7,3 +7,4 @@ eval_every: 1
 checkpoint_every: 1
 reinit_class_tokens: True
 num_workers: 4
+classification_loss: torch.nn.CrossEntropyLoss

@@ -8,11 +8,13 @@ from os.path import join
 import argparse
 
 from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
+from peekvit.models.topology import reinit_class_tokens
+from peekvit.utils.losses import LossCompose
 
 import hydra
-from hydra.utils import instantiate
 import torchmetrics
 from omegaconf import OmegaConf, DictConfig
+from hydra.utils import instantiate
 
 
 
@@ -37,7 +39,9 @@ def train(cfg: DictConfig):
 
     # logger
     config_dict = OmegaConf.to_container(cfg, resolve=True)
-    logger = instantiate(cfg.logger, settings=config_dict, dir=experiment_dir)
+    from pprint import pprint
+    pprint(config_dict)
+    logger = instantiate(cfg.logger, settings=tuple(config_dict), dir=experiment_dir)
     
 
     # dataset and dataloader
@@ -56,11 +60,20 @@ def train(cfg: DictConfig):
         load_from = load_from if load_from.endswith('.pth') else get_last_checkpoint_path(load_from)
         print('Loading model from checkpoint: ', load_from)
         model, _, _, _, _ = load_state(load_from, model=model)
-        
+    
+    # edit model here if requested
+    if training_args['reinit_class_tokens']:
+        model = reinit_class_tokens(model)
 
-    # losses 
-    main_criterion = instantiate(cfg.main_criterion)
-
+    # main loss 
+    main_criterion = instantiate(cfg.loss.classification_loss)
+    
+    # we might have N additional losses
+    # so we store the in a dictionary
+    additional_losses = LossCompose(cfg.loss.additional_losses)
+    print(additional_losses.additional_losses)
+    
+    
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
@@ -75,11 +88,11 @@ def train(cfg: DictConfig):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels) 
-            loss = main_loss 
+            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=0.5, dict_prefix='train/')
+            loss = main_loss + add_loss_val
             loss.backward()
             optimizer.step()
-            
-            logger.log({'train/loss': main_loss.detach().item()})
+            logger.log({'train/loss': main_loss.detach().item(), 'classification_loss': main_loss.detach().item()} | add_loss_dict)
 
     # validation loop
     @torch.no_grad()
@@ -91,6 +104,7 @@ def train(cfg: DictConfig):
             batch, labels = batch.to(device), labels.to(device)
             out = model(batch)
             val_loss = main_criterion(out, labels) 
+            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=0.5, dict_prefix='val/')
             predicted = torch.argmax(out, 1)
             metric(predicted, labels)
             batches_loss += val_loss.detach().item()
@@ -99,7 +113,7 @@ def train(cfg: DictConfig):
         acc = metric.compute()
         metric.reset()
 
-        logger.log({'val/accuracy': acc, 'val/loss': val_loss})
+        logger.log({'val/accuracy': acc, 'val/loss': val_loss} | add_loss_dict)
         return acc, val_loss
     
 
