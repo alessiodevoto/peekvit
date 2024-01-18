@@ -8,6 +8,8 @@ import torchmetrics
 import hydra
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
+from pprint import pprint
+
 
 from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
 from peekvit.models.topology import reinit_class_tokens
@@ -29,7 +31,6 @@ def train(cfg: DictConfig):
     
     # logger
     config_dict = OmegaConf.to_container(cfg, resolve=True)
-    from pprint import pprint
     pprint(config_dict)
     logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
     
@@ -82,30 +83,30 @@ def train(cfg: DictConfig):
             loss = main_loss + add_loss_val
             loss.backward()
             optimizer.step()
-            logger.log({'train/loss': main_loss.detach().item(), 'classification_loss': main_loss.detach().item()} | add_loss_dict)
+            logger.log({'train/total_loss': main_loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
 
 
     # validation loop
     @torch.no_grad()
     def validate_epoch(model, loader, epoch):
         model.eval()
-        
-        batches_loss = 0
-        for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch}'):
-            batch, labels = batch.to(device), labels.to(device)
-            out = model(batch)
-            val_loss = main_criterion(out, labels) 
-            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=0.5, dict_prefix='val/')
-            predicted = torch.argmax(out, 1)
-            metric(predicted, labels)
-            batches_loss += val_loss.detach().item()
-        
-        val_loss = batches_loss / len(loader)
-        acc = metric.compute()
-        metric.reset()
+        for budget in cfg.training.val_budgets:
+            model.set_budget(budget)
+            batches_loss = 0
+            for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch}'):
+                batch, labels = batch.to(device), labels.to(device)
+                out = model(batch)
+                val_loss = main_criterion(out, labels) 
+                predicted = torch.argmax(out, 1)
+                metric(predicted, labels)
+                batches_loss += val_loss.detach().item()
+            
+            val_loss = batches_loss / len(loader)
+            acc = metric.compute()
+            metric.reset()
 
-        logger.log({'val/accuracy': acc, 'val/loss': val_loss} | add_loss_dict)
-        return acc, val_loss
+            logger.log({f'budget_{budget}/val/accuracy': acc, f'budget_{budget}/val/': val_loss} )
+            return acc, val_loss
     
 
     for epoch in range(training_args['num_epochs']+1):
