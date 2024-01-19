@@ -1,4 +1,4 @@
-_target_: peekvit.models.vit.VisionTransformer
+_target_: peekvit.models.moevit.MoEVisionTransformer
 image_size: ${dataset.image_size}
 patch_size: 16
 num_classes: 10
@@ -6,3 +6,5 @@ hidden_dim: 512
 mlp_dim: 512
 num_layers: 4
 num_heads: 8
+mlp_moes:  null # The list of indices of transformer layers which should be MLP MoE. Defaults to None.
+attn_moes: null # The list of indices of transformer layers which should be attention MoE. Defaults to None.
