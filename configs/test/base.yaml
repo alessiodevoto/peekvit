@@ -1,6 +1,6 @@
 test_batch_size: 128
 num_workers: 4
-budgets: [0.1, 0.4, 0.8]
+budgets: [0.2, 0.4, 0.8, 1.0]
 noises: null
 
 cumulative_plot: True

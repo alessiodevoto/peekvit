@@ -145,7 +145,7 @@ def add_noise(model, layer: int, noise_type:str,  std: float = None, snr: float 
         noise_snr (float): The signal-to-noise ratio of the noise.
         prob (float): The probability of applying the noise for token dropping.
     """
-    from models.blocks import NoiseBlock
+    from peekvit.models.blocks import NoiseBlock
     noise_module = NoiseBlock(noise_type=noise_type, std=std, snr=snr, prob=prob)
     new_layers = list(model.encoder.layers)
 
@@ -219,22 +219,6 @@ def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=Fal
         
     return model, optimizer, state['epoch'], state['model_args'], state['noise_args']
 
-
-
-def get_last_checkpoint_path(experiment_dir):
-    """
-    Get the path of the last checkpoint in the experiment directory.
-
-    Args:
-        experiment_dir (str): The directory path where the experiment is stored.
-
-    Returns:
-        str: The path of the last checkpoint in the experiment directory.
-    """
-    print('Loading last checkpoint from experiment directory: ', experiment_dir)
-    checkpoints_dir = join(experiment_dir, 'checkpoints')
-    last_checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
-    return join(checkpoints_dir, last_checkpoint)
 
 
 def get_checkpoint_path(experiment_dir, epoch='last'):

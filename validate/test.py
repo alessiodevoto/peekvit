@@ -20,7 +20,7 @@ import hydra
 from pprint import pprint
 
 from peekvit.utils.utils import load_state, add_noise, make_experiment_directory
-from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_model_budget_vs_noise_vs_acc, plot_model_noise_vs_budget_vs_acc, plot_budget_recap
+from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_budget_recap, plot_cumulative_budget_and_noise_recap
 from peekvit.utils.flops_count import compute_flops
 
 
@@ -49,6 +49,7 @@ def validate(
 
     # if model parameters are not specified in the config file, load the model from the checkpoint
     model, _, epoch, _, _ = load_state(model_checkpoint, model=None, strict=True)
+    model.eval()
     model.to(device)
     
 
@@ -66,10 +67,11 @@ def validate(
     noise_vals = [None]
     noise_type = None
     if noise_settings is not None and noise_settings != {}:
-        noise_module = instantiate(noise_settings, model=model)
+        noise_type = noise_settings.noise_type
+        noise_module = add_noise(noise_type=noise_settings.noise_type, layer=noise_settings.layer, model=model)
         noise_vals = noises 
-        noise_type = noise_settings._target_
-
+        
+    
     # validate
     # this will be a dict of dicts. {budget_or_flops : {noise_value : accuracy}}
     results_per_budget = defaultdict(dict)
@@ -93,12 +95,12 @@ def validate(
                 noise_module.set_value(val)
             
             # compute accuracy given budget
-            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} intensity: {val}'):
+            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} at {val}'):
                 batch, labels = batch.to(device), labels.to(device)
                 
                 out = model(batch)
                 predicted = torch.argmax(out, 1)
-                metric(predicted, labels)
+                metric.update(predicted, labels)
             
             acc = metric.compute()
             metric.reset()
@@ -149,6 +151,8 @@ def test(cfg: DictConfig):
         raise ValueError('"load_from" must be specified to load a model from a checkpoint.')
     elif isinstance(cfg.load_from, str):
         load_from = [cfg.load_from]
+    else:
+        load_from = cfg.load_from
 
     # set seed and device
     torch.manual_seed(cfg.seed)
@@ -175,12 +179,12 @@ def test(cfg: DictConfig):
         logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
 
 
-        load_from = get_checkpoint_path(experiment_dir)
-        print('Loading model from checkpoint: ', load_from)
+        model_checkpoint = get_checkpoint_path(experiment_dir)
+        print('Loading model from checkpoint: ', model_checkpoint)
 
         # validate
         results_per_budget, results_per_flops = validate(
-            load_from, 
+            model_checkpoint, 
             logger,
             val_loader, 
             budgets=cfg.test.budgets,
@@ -204,8 +208,8 @@ def test(cfg: DictConfig):
                 save_dir=os.path.join(experiment_dir, 'images'))        
         
         # store results in dictionary
-        all_results_per_budget[load_from] = results_per_budget
-        all_results_per_flops[load_from] = results_per_flops
+        all_results_per_budget[experiment_dir] = results_per_budget
+        all_results_per_flops[experiment_dir] = results_per_flops
     
     # plot cumulative results
     if cfg.test.cumulative_plot:
@@ -217,7 +221,7 @@ def test(cfg: DictConfig):
 
         noises = cfg.test.noises
         if noises is not None and len(noises) > 0:
-            plot_model_noise_vs_budget_vs_acc(
+            plot_cumulative_budget_and_noise_recap(
                 all_results_per_flops, 
                 additional_x_labels=cfg.test.budgets,
                 save_dir=cumulative_plot_dir) 
