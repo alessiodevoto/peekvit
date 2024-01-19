@@ -1,5 +1,5 @@
 _target_: peekvit.models.vit.VisionTransformer
-image_size: 160
+image_size: ${dataset.image_size}
 patch_size: 16
 num_classes: 10
 hidden_dim: 512

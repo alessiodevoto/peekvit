@@ -45,6 +45,126 @@ def denormalize(t: torch.Tensor, mean: Tuple, std: Tuple):
 
 ######################################################## Common ##################################################################
 
+def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_label=""):
+    """
+    Plots the budget recap by plotting the accuracy values against the budget values.
+    
+    Parameters:
+    - accs_per_budget (dict): A dictionary mapping budget values to accuracy values.
+    - accs_per_flops (dict): A dictionary mapping budget values to accuracy values.
+    - save_dir (str): The directory where the plot images will be saved.
+    """
+    
+    fig, ax = plt.subplots()
+    ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o')
+    ax.set_xlabel('Budget')
+    ax.set_ylabel('Accuracy')
+    ax.set_title('Budget vs Accuracy')
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
+
+    fig, ax = plt.subplots()
+    ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o')
+    ax.set_xlabel('Budget')
+    ax.set_ylabel('Accuracy')
+    ax.set_title('Budget vs Accuracy')
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
+
+
+def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label=""):
+    
+    fig, ax = plt.subplots()
+    for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
+      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=cm.viridis(i))
+      ax.set_xlabel('Budget')
+      ax.set_ylabel('Accuracy')
+      ax.set_title('Budget vs Accuracy')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    
+    plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
+    
+    fig, ax = plt.subplots()
+    for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
+      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=cm.viridis(i))
+      ax.set_xlabel('Budget')
+      ax.set_ylabel('Accuracy')
+      ax.set_title('Budget vs Accuracy')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    
+    plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
+
+
+def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, additional_label=""):
+    fig, ax = plt.subplots()
+    for budget, results in accs_per_budget.items():
+        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+        ax.set_xlabel('Noise')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Noise vs Accuracy across budgets')
+        ax.legend()
+    plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+
+
+    fig, ax = plt.subplots()
+    for budget, results in accs_per_flops.items():
+        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+        ax.set_xlabel('Noise')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Noise vs Accuracy across budgets')
+        ax.legend()
+    plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
+
+
+def plot_cumulative_budget_and_noise_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_x_labels=""):
+    # results per budget is a dict of dicts, where the first key is the budget and 
+    # the second key is the noise value, and the value is the accuracy.
+    # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
+    # and we have a line for each noise
+
+    # create new dictionary with noise as first key and budget as second key
+
+    _results_per_noise = {}
+    for run in run_accs_per_flops:
+        _results_per_noise[run] = defaultdict(dict)
+        for budget in run_accs_per_flops[run]:   
+            for noise in run_accs_per_flops[run][budget]:
+                _results_per_noise[run][noise][budget if budget not in {0.0, float('inf')} else 1.1] = run_accs_per_flops[run][budget][noise]
+
+    print(_results_per_noise)
+
+
+    fig, ax = plt.subplots()
+    
+    for run, results_per_noise in _results_per_noise.items():
+        is_base_run = 'base' in run
+        for noise, results in results_per_noise.items():
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
+            ax.set_ylabel('Accuracy')
+            ax.set_title('Budget vs Accuracy across Noises')
+            # set y range
+            # plt.ylim([0.1, 0.9])
+    
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    plt.grid(visible=True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    
+    
+    
+    # create save dir if it does not exist
+    if save_dir is not None:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc_noises.png'))
+       
+      
+    return fig
+
+
 def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
   """
   Plots the accuracy vs budget curve for the given budgets and accuracies.
@@ -107,6 +227,7 @@ def plot_budget_vs_sparsity(budgets, accs, epoch, save_dir):
   
   return fig
 
+
 def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   """
   Plots the accuracy vs noise curve for the given noises and accuracies.
@@ -138,7 +259,7 @@ def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   return fig
 
 
-def plot_budget_vs_noise_vs_acc(results_per_budget: dict, save_dir: str = None):
+def plot_budget_vs_noise_vs_acc(results_per_budget: dict,  save_dir: str = None):
     # results per budget is a dict of dicts, where the first key is the budget and 
     # the second key is the noise value, and the value is the accuracy.
     # we want to create a plot where the x axis is the noise value, the y axis is the accuracy, 
@@ -152,8 +273,7 @@ def plot_budget_vs_noise_vs_acc(results_per_budget: dict, save_dir: str = None):
         ax.set_ylabel('Accuracy')
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
-        # set y range
-        # plt.ylim([0.1, 0.9])
+
 
         # create save dir if it does not exist
         if save_dir is not None:
@@ -188,7 +308,6 @@ def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = N
             plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
       
     return fig
-
 
 
 def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = None, additional_x_labels: List = None):

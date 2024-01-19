@@ -1,7 +1,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from collections import OrderedDict
-from typing import List
+from typing import Any, List
 import torch
 from datetime import datetime
 from os.path import join
@@ -22,6 +22,9 @@ def make_experiment_directory(dir_path):
 
     checkpoints_dir = join(dir_path, 'checkpoints')
     os.makedirs(checkpoints_dir, exist_ok=True)
+
+    images_dir = join(dir_path, 'images')
+    os.makedirs(images_dir, exist_ok=True)
     
     return dir_path, checkpoints_dir
 
@@ -181,7 +184,7 @@ def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optim
     torch.save(state, f'{path}/epoch_{epoch:03}.pth')
 
 
-def load_state(path, model=None, optimizer=None):
+def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=False):
     """
     Load the model state from a given path.
 
@@ -196,10 +199,11 @@ def load_state(path, model=None, optimizer=None):
     state = torch.load(path)
     if model is None:
         # create model based on saved state
+        print('Creating model based on saved state')
         model = build_model(state['model_class'], state['model_args'], state['noise_args'])
     
     try:
-        res = model.load_state_dict(state['state_dict'], strict=False)
+        res = model.load_state_dict(state['state_dict'], strict=strict)
         if len(res[0]) > 0:
             print('Some parameters are not present in the checkpoint and will be randomly initialized: ', res[0])
     except RuntimeError as e:
@@ -231,5 +235,24 @@ def get_last_checkpoint_path(experiment_dir):
     checkpoints_dir = join(experiment_dir, 'checkpoints')
     last_checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
     return join(checkpoints_dir, last_checkpoint)
+
+
+def get_checkpoint_path(experiment_dir, epoch='last'):
+    """
+    Get the path of the checkpoint corresponding to the given epoch in the experiment directory.
+
+    Args:
+        experiment_dir (str): The directory path where the experiment is stored.
+        epoch (int): The epoch number.
+
+    Returns:
+        str: The path of the checkpoint corresponding to the given epoch in the experiment directory.
+    """
+    checkpoints_dir = join(experiment_dir, 'checkpoints')
+    if epoch is None or epoch == 'last':
+        checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
+    else:
+        checkpoint = f'epoch_{epoch:03}.pth'
+    return join(checkpoints_dir, checkpoint)
     
 

@@ -11,14 +11,14 @@ from hydra.utils import instantiate
 from pprint import pprint
 
 
-from peekvit.utils.utils import get_last_checkpoint_path, save_state, load_state, make_experiment_directory
+from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, make_experiment_directory
 from peekvit.models.topology import reinit_class_tokens
 from peekvit.utils.losses import LossCompose
 
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
+@hydra.main(version_base=None, config_path="../configs", config_name="train_config")
 def train(cfg: DictConfig):
 
     torch.manual_seed(cfg.seed)
@@ -51,7 +51,7 @@ def train(cfg: DictConfig):
     load_from = cfg.load_from
     if load_from is not None:
         # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
-        load_from = load_from if load_from.endswith('.pth') else get_last_checkpoint_path(load_from)
+        load_from = load_from if load_from.endswith('.pth') else get_checkpoint_path(load_from)
         print('Loading model from checkpoint: ', load_from)
         model, _, _, _, _ = load_state(load_from, model=model)
     

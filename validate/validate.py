@@ -128,7 +128,8 @@ if __name__ == '__main__':
 
     store_to = join(args.load_from, 'eval')
 
-    validate(store_to, 
+    validate(
+            store_to, 
             load_from=args.load_from, 
             num_images=args.num_images, 
             epoch=args.epoch, 
