@@ -124,27 +124,20 @@ def freeze_module(module):
         param.requires_grad = False
 
 
-def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
-    # freeze all parameters except the gates
-    print('Freezing all parameters except the gates and the class token')
-    
-    frozen_params, trainable_params = [], []
-    for param_name, param in residualvit_model.named_parameters():
-        if any([x in param_name for x in ['gate', 'class', 'head', 'threshold']]):
-            param.requires_grad = True
-            trainable_params.append(param_name)
-        else:
-            param.requires_grad = False
-            frozen_params.append(param_name)
-    
-    if verbose:
-        print('Trainable parameters:', trainable_params)
-        print('Frozen parameters:', frozen_params)
-
-    return residualvit_model
-
 
 def train_only_these_params(model, params_list: List, verbose:bool=False):
+    """
+    Trains only the parameters in the model that contain any of the words in the given params_list.
+    
+    Args:
+        model (nn.Module): The model to train.
+        params_list (List[str]): A list of words to match against parameter names.
+        verbose (bool, optional): Whether to print information about the trainable and frozen parameters. 
+            Defaults to False.
+    
+    Returns:
+        nn.Module: The model with updated requires_grad attributes for the parameters.
+    """
     
     print('Freezing all parameters except for those containing any of these words in their names: ', params_list)
     

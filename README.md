@@ -1,5 +1,5 @@
 # peekvit
-Various Vision Transformers implementations for research experiments.
+Implementation of Vision Transformers & variants for experiments.
 This repo uses [hydra](https://hydra.cc/) for managing experiment in a modular way.
 
 ### How to: run an experiment
