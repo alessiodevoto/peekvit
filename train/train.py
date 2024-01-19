@@ -12,7 +12,7 @@ from pprint import pprint
 
 
 from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, make_experiment_directory
-from peekvit.models.topology import reinit_class_tokens
+from peekvit.models.topology import reinit_class_tokens, train_only_these_params
 from peekvit.utils.losses import LossCompose
 
 
@@ -58,6 +58,8 @@ def train(cfg: DictConfig):
     # edit model here if requested
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
+    
+
 
     # main loss 
     main_criterion = instantiate(cfg.loss.classification_loss)
@@ -75,6 +77,9 @@ def train(cfg: DictConfig):
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
         model.train()
+        if not training_args['train_backbone']:
+            model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()

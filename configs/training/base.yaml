@@ -2,9 +2,9 @@ train_batch_size: 128
 eval_batch_size: 128
 lr: 1e-3
 num_epochs: 100
-eval_every: 10
-checkpoint_every: 10
-reinit_class_tokens: True
+eval_every: 10                    # -1 for no evaluation
+checkpoint_every: 10              # -1 for no checkpointing
+reinit_class_tokens: True         # reinitialize class tokens before training
+train_backbone: False             # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
 num_workers: 4
-classification_loss: torch.nn.CrossEntropyLoss
-val_budgets: [0.25, 0.85]
+val_budgets: [0.2, 0.8]           # budgets to use during validation

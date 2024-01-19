@@ -1,6 +1,9 @@
 classification_loss:
     _target_: torch.nn.CrossEntropyLoss
 
+# additional losses are optional and are used to regularize the model
+# they can be used for moes or residual models
+# for more info see peekcit/losses.py
 additional_losses:
     mse:
         _target_:  peekvit.utils.losses.MSELoss

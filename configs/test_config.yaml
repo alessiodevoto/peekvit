@@ -1,14 +1,14 @@
-# PATHS
-#Structure of the workspace:
+
+# Structure of the workspace:
 #
-#workspace
-#├── configs/
-#│   └── config.yaml
-#├── runs/
-#    ├── YYYY-mm-dd-hh-MM-SS/
-#        ├── checkpoints/
-#        ├── images/    
-#        ├── logs.txt
+# workspace
+# ├── configs/
+# │   └── config.yaml
+# ├── runs/
+#     ├── YYYY-mm-dd-hh-MM-SS/
+#         ├── checkpoints/
+#         ├── images/    
+#         ├── logs.txt
 #
 
 workspace: '/home/aledev/projects/peekvit-workspace/peekvit'

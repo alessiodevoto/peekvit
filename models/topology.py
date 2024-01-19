@@ -144,12 +144,12 @@ def train_only_gates_and_cls_token(residualvit_model, verbose:bool=False):
     return residualvit_model
 
 
-def train_only_these_params(residualvit_model, params_list: List, verbose:bool=False):
+def train_only_these_params(model, params_list: List, verbose:bool=False):
     
     print('Freezing all parameters except for those containing any of these words in their names: ', params_list)
     
     frozen_params, trainable_params = [], []
-    for param_name, param in residualvit_model.named_parameters():
+    for param_name, param in model.named_parameters():
         if any([x in param_name for x in params_list]):
             param.requires_grad = True
             trainable_params.append(param_name)
@@ -161,4 +161,4 @@ def train_only_these_params(residualvit_model, params_list: List, verbose:bool=F
         print('Trainable parameters:', trainable_params)
         print('Frozen parameters:', frozen_params)
 
-    return residualvit_model
+    return model
