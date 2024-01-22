@@ -2,14 +2,19 @@
 Implementation of Vision Transformers & variants for experiments.
 This repo uses [hydra](https://hydra.cc/) for managing experiment in a modular way.
 
-### How to: run an experiment
-- Define training parameters (model, dataset, etc..) are defined and explained in the hydra file `train_config.yaml`. (If you just want to run a quick experiment with default parameters just edit the path to your workspace and the wandb credentials)
+### How To: run a quick experiment wiht default parameters
+- Edit the path to your workspace and wandb credentials in `train_config.yaml`. 
+- Run `python train/train.py` 
+
+
+### How To: run an experiment
+- Define training parameters (model, dataset, etc..) in the hydra file `train_config.yaml`. All explanations provided inside the file.
 - Run `python train/train.py` 
 
 Notice that each time you run an experiment, a directory in your workspace will be created. Such directory contains the checkpoints for the model (if any) and the logs. 
 
-### How to: test a model checkpoint
-- Locate the experiment directory on your local file system and edit the `load_from` field in the `test_config.yaml`
+### How To: test a model checkpoint
+- Locate the experiment directory containaning your checkpoint on your local file system and edit the `load_from` field in the `test_config.yaml`. 
 - Edit the parameters for testing in the `test/` hydra configs. There you can decide whether you want to add noise or set budgets to evaluate on.
 - Run  `python validate/test.py`. 
 
@@ -22,5 +27,6 @@ Plots for each run will be stored to the run experiment directory where the chec
 
 
 #### TODOS
-- fix requirements
+- fix and test requirements
+- fix local logging, now it has to many prints
 - fix the plots for comparing multiple runs
