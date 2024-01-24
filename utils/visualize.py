@@ -489,7 +489,8 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
   patches_per_side = (image_size // patch_size)
   
   figs = {}
-  for img_idx, (img, label) in tqdm(enumerate(images), desc='Preparing masked images plots'):
+  i = 0
+  for img, label in tqdm(images, desc='Preparing masked images plots'):
     
     # forward pass
     _img = model_transform(img) if model_transform is not None else img
@@ -526,14 +527,16 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
 
       # set title to predicted and ground truth class
       try:
-        title = f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}'
-        axs[0,0].title.set_text(title)
+        # title = f'Predicted class: {IMAGENETTE_CLASSES[torch.argmax(out).item()]} Ground truth class: {IMAGENETTE_CLASSES[label]}'
+        #axs[0,0].title.set_text(title)
+         pass
       except Exception as e:
         pass
 
     fig.tight_layout()
 
-    figs[f'mask_{img_idx}'] = fig
+    figs[f'mask_{i}'] = fig
+    i+= 1
 
   plt.close()
   
