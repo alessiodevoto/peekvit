@@ -24,16 +24,6 @@ from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative
 from peekvit.utils.flops_count import compute_flops
 
 
-torch.manual_seed(0)
-
-
-# PATHS 
-# all images, checkpoints and logs will be saved to base path in a structured way
-DATASET_ROOT = '/home/aledev/projects/moe-workspace/data/imagenette'
-
-# HYPERPARAMETERS 
-# defined here as this is a quick experiment
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def validate(
@@ -141,6 +131,7 @@ def validate(
 @hydra.main(version_base=None, config_path="../configs", config_name="test_config")
 @torch.no_grad()
 def test(cfg: DictConfig):
+
 
     # display config
     config_dict = OmegaConf.to_container(cfg, resolve=True)

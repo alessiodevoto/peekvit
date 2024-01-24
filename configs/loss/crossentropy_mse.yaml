@@ -7,6 +7,6 @@ classification_loss:
 additional_losses:
     mse:
         _target_:  peekvit.utils.losses.MSELoss
-        weight: 0.1
-        strict: False
+        weight: 0.2
+        strict: True
         budget: null

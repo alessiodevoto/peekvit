@@ -46,6 +46,7 @@ class Imagenette:
     self.test_transform = test_transform
     self.target_transform = target_transform
     self.image_size = image_size
+    self.denormalize_transform = self.IMAGENETTE_DENORMALIZE_TRANSFORM
     self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_imagenette(root, train_transform, test_transform, target_transform, image_size)
 
 

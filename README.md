@@ -31,7 +31,8 @@ Plots for each run will be stored to the run experiment directory where the chec
 
 ### Example Scripts
 
-- Train a simple vit: `python train/train.py`
+- Train a vit with default params: `python train/train.py`
+- Train a vit with custom params: `python train/train.py model.hidden_dim=318` (you can achieve the same by editing the yaml file)
 - Train a residualvit (with masks) starting from a vit checkpoint: `python train/train.py model=residualvit training=finetuning losses=crossentropy_mse load_from=<path to experiment_directory containing vit>`
 
 
