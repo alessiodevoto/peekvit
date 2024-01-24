@@ -2,6 +2,8 @@
 Implementation of Vision Transformers & variants for experiments.
 This repo uses [hydra](https://hydra.cc/) for managing experiment in a modular way.
 
+Before testing, don't forget to `pip install -r requirements.txt`.
+
 ### How To: run a quick experiment wiht default parameters
 - Edit the path to your workspace and wandb credentials in `train_config.yaml`. 
 - Run `python train/train.py` 
@@ -27,6 +29,5 @@ Plots for each run will be stored to the run experiment directory where the chec
 
 
 #### TODOS
-- fix and test requirements
 - fix local logging, now it has to many prints
 - fix the plots for comparing multiple runs

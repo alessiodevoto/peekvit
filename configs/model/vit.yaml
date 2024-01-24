@@ -2,7 +2,7 @@ _target_: peekvit.models.vit.VisionTransformer
 image_size: 160
 patch_size: 8
 num_classes: 10
-hidden_dim: 512
-mlp_dim: 1024
+hidden_dim: 256
+mlp_dim: 768
 num_layers: 4
-num_heads: 8
+num_heads: 4

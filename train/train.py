@@ -66,7 +66,9 @@ def train(cfg: DictConfig):
     
     # we might have N additional losses
     # so we store the in a dictionary
-    additional_losses = LossCompose(cfg.loss.additional_losses)
+    additional_losses = None
+    if cfg.loss.additional_losses is not None:
+        additional_losses = LossCompose(cfg.loss.additional_losses)
         
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
@@ -85,34 +87,47 @@ def train(cfg: DictConfig):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels) 
-            add_loss_dict, add_loss_val = additional_losses.compute(model, budget=model.current_budget, dict_prefix='train/')
+            add_loss_dict, add_loss_val = {}, 0
+            if additional_losses is not None:
+                add_loss_dict, add_loss_val = additional_losses.compute(model, budget=model.current_budget, dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()
             optimizer.step()
             logger.log({'train/total_loss': main_loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
 
 
-    # validation loop
     @torch.no_grad()
     def validate_epoch(model, loader, epoch):
         model.eval()
-        for budget in cfg.training.val_budgets:
-            model.set_budget(budget)
-            batches_loss = 0
-            for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch}'):
-                batch, labels = batch.to(device), labels.to(device)
-                out = model(batch)
-                val_loss = main_criterion(out, labels) 
-                predicted = torch.argmax(out, 1)
-                metric(predicted, labels)
-                batches_loss += val_loss.detach().item()
-            
-            val_loss = batches_loss / len(loader)
-            acc = metric.compute()
-            metric.reset()
+        batches_loss = 0
+        for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch}'):
+            batch, labels = batch.to(device), labels.to(device)
+            out = model(batch)
+            val_loss = main_criterion(out, labels) 
+            predicted = torch.argmax(out, 1)
+            metric(predicted, labels)
+            batches_loss += val_loss.detach().item()
+        
+        val_loss = batches_loss / len(loader)
+        acc = metric.compute()
+        metric.reset()
 
-            logger.log({f'budget_{budget}/val/accuracy': acc, f'budget_{budget}/val/': val_loss} )
-            return acc, val_loss
+        return acc, val_loss
+
+    # validation loop
+    @torch.no_grad()
+    def validate(model, loader, epoch):
+        model.eval()
+        if hasattr(model, 'set_budget'):
+            for budget in cfg.training.val_budgets:
+                model.set_budget(budget)
+                acc, val_loss = validate_epoch(model, loader, epoch)
+                logger.log({f'budget_{budget}/val/accuracy': acc, f'budget_{budget}/val/loss': val_loss})
+        else:
+            acc, val_loss = validate_epoch(model, loader, epoch)
+            logger.log({'val/accuracy': acc, 'val/loss': val_loss})
+        
+        return acc, val_loss
     
 
     for epoch in range(training_args['num_epochs']+1):
@@ -120,7 +135,7 @@ def train(cfg: DictConfig):
         train_epoch(model, train_loader, optimizer, epoch)
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
-            validate_epoch(model, val_loader, epoch)
+            validate(model, val_loader, epoch)
             
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
