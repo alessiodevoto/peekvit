@@ -5,6 +5,6 @@ num_classes: 10
 hidden_dim: 256
 mlp_dim: 768
 num_layers: 4
-num_heads: 8
+num_heads: 4
 mlp_moes:  null # The list of indices of transformer layers which should be MLP MoE. Defaults to None.
 attn_moes: null # The list of indices of transformer layers which should be attention MoE. Defaults to None.

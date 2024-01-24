@@ -199,7 +199,12 @@ def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=Fal
     state = torch.load(path)
     if model is None:
         # create model based on saved state
+        # TODO edit this to load with hydra
         print('Creating model based on saved state')
+        print(state['model_class'])
+        print(state['model_args'])
+        state['model_args'].pop('torch_pretrained_weights', None)
+        state['model_args'].pop('_target_', None)
         model = build_model(state['model_class'], state['model_args'], state['noise_args'])
     
     try:

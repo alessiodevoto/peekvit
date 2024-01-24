@@ -97,10 +97,10 @@ def train(cfg: DictConfig):
 
 
     @torch.no_grad()
-    def validate_epoch(model, loader, epoch):
+    def validate_epoch(model, loader, epoch, budget=''):
         model.eval()
         batches_loss = 0
-        for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch}'):
+        for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch} {budget}'):
             batch, labels = batch.to(device), labels.to(device)
             out = model(batch)
             val_loss = main_criterion(out, labels) 
@@ -121,7 +121,7 @@ def train(cfg: DictConfig):
         if hasattr(model, 'set_budget'):
             for budget in cfg.training.val_budgets:
                 model.set_budget(budget)
-                acc, val_loss = validate_epoch(model, loader, epoch)
+                acc, val_loss = validate_epoch(model, loader, epoch, budget=f'budget_{budget}')
                 logger.log({f'budget_{budget}/val/accuracy': acc, f'budget_{budget}/val/loss': val_loss})
         else:
             acc, val_loss = validate_epoch(model, loader, epoch)

@@ -5,7 +5,7 @@ num_classes: 10
 hidden_dim: 256
 mlp_dim: 768
 num_layers: 4
-num_heads: 8
+num_heads: 4
 attention_dropout: 0.1
 dropout: 0.1
 residual_layers: ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'] 

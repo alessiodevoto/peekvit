@@ -17,14 +17,14 @@ experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
 device: 'cuda:0'
 seed: 0
-load_from: ['${experiments_dir}/2024_01_16_14_32_13_vit_bb_16_sb_'] #, '${experiments_dir}/2024_01_04_14_38_28_single_budget_strict']
+load_from: #['${experiments_dir}/2024_01_16_14_32_13_vit_bb_16_sb_'] #, '${experiments_dir}/2024_01_04_14_38_28_single_budget_strict']
 
 
 
 defaults:
-  - logger: wandb
+  - logger: local
   - dataset: imagenette
-  - noise: no_noise 
+  - noise: drop 
   - test: base
   - _self_
 

@@ -8,12 +8,13 @@ Before testing, don't forget to `pip install -r requirements.txt`.
 - Edit the path to your workspace and wandb credentials in `train_config.yaml`. 
 - Run `python train/train.py` 
 
+This will download the Imagenette dataset and train a small Vision transformer on it. Notice that each time you run an experiment, a directory in your workspace will be created. Such directory contains the checkpoints for the model (if any) and the logs. 
 
-### How To: run an experiment
-- Define training parameters (model, dataset, etc..) in the hydra file `train_config.yaml`. All explanations provided inside the file.
+### How To: run an experiment with custom model
+- Define experiment settings (model, dataset, training, losses etc..) in the hydra file `train_config.yaml`. All explanations provided inside the file.
 - Run `python train/train.py` 
 
-Notice that each time you run an experiment, a directory in your workspace will be created. Such directory contains the checkpoints for the model (if any) and the logs. 
+If your model has a sort of trainable budget, is trained starting from a checkpoint or has custom regularizations, don't forget to set the correspoding parameters in the training configurations (`train_backbone`, `reinit_class_token`, `losses` etc...) 
 
 ### How To: test a model checkpoint
 - Locate the experiment directory containaning your checkpoint on your local file system and edit the `load_from` field in the `test_config.yaml`. 
@@ -28,6 +29,14 @@ Plots for each run will be stored to the run experiment directory where the chec
 - Edit the `train_config.yaml` to use your model/dataset.
 
 
+### Example Scripts
+
+- Train a simple vit: `python train/train.py`
+- Train a residualvit (with masks) starting from a vit checkpoint: `python train/train.py model=residualvit training=finetuning losses=crossentropy_mse load_from=<path to experiment_directory containing vit>`
+
+
+
 #### TODOS
 - fix local logging, now it has to many prints
 - fix the plots for comparing multiple runs
+- detailed comments for losses
