@@ -43,7 +43,7 @@ class RankViTBlock(nn.Module):
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
         # Sort tokens
-        self.sort_tokens = False
+        self.sort = False
         self.current_budget = 1.0
     
     @staticmethod
@@ -70,7 +70,7 @@ class RankViTBlock(nn.Module):
     
 
     def mask_tokens(self, input: torch.Tensor):
-        if not self.training or not self.sort_tokens:
+        if not self.training or not self.sort:
             return input
 
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -101,7 +101,7 @@ class RankViTBlock(nn.Module):
     
 
     def drop_tokens(self, input: torch.Tensor):
-        if self.training or not self.sort_tokens:
+        if self.training or not self.sort:
             return input
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         # we assume input is sorted in descending order
@@ -116,7 +116,7 @@ class RankViTBlock(nn.Module):
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
-        if self.sort_tokens:
+        if self.sort:
             input = self.sort_tokens(input)
         
         # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
@@ -306,7 +306,7 @@ class RankVisionTransformer(nn.Module):
                 sort_tokens (bool): Flag indicating whether to sort tokens.
             """
             for rankvitblock in self.encoder.layers:
-                rankvitblock.sort_tokens = sort_tokens
+                rankvitblock.sort = sort_tokens
     
 
     def set_budget(self, budget: float):

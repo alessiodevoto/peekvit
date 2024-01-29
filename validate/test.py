@@ -118,7 +118,7 @@ def validate(
             # TODO check that there are no mistakes in the flops computation
             # if the flops are averaged over the batch 
             # check that the expected value is correct
-            flops /= len(val_loader)
+            flops /= len(val_loader)        
             
             if val is not None:
                 results_per_budget[budget][val] = acc.item()
