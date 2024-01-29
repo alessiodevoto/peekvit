@@ -34,11 +34,12 @@ def validate(
         noise_settings: DictConfig,
         noises: List,
         device: torch.device,
+        model: torch.nn.Module = None,
         ):
     
 
     # if model parameters are not specified in the config file, load the model from the checkpoint
-    model, _, epoch, _, _ = load_state(model_checkpoint, model=None, strict=True)
+    model, _, epoch, _, _ = load_state(model_checkpoint, model=model, strict=True)
     model.eval()
     model.to(device)
     
@@ -51,6 +52,11 @@ def validate(
     if budgets is None or len(budgets) == 0:
         print('Budgets not specified, setting to default value 1.0')
         budgets = [1.0]
+    
+    if hasattr(model, 'enable_ranking'):
+        print('Detected model with ranking capabilities. Enabling ranking for testing.')
+        model.enable_ranking(True)
+        
     
     # add noise module
     noise_module = None
@@ -85,7 +91,7 @@ def validate(
                 noise_module.set_value(val)
             
             # compute accuracy given budget
-            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} at {val}'):
+            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} - {val}'):
                 batch, labels = batch.to(device), labels.to(device)
                 
                 out = model(batch)
@@ -122,7 +128,8 @@ def validate(
                 results_per_flops[flops] = acc.item()
 
     logger.log({'flops': results_per_flops, 'budget': results_per_budget})
-    
+    # print('Results per budget: ', results_per_budget)
+    # print('Results per flops: ', results_per_flops)
     return results_per_budget, results_per_flops
 
 
@@ -137,6 +144,10 @@ def test(cfg: DictConfig):
     config_dict = OmegaConf.to_container(cfg, resolve=True)
     pprint(config_dict)
 
+    # set seed and device
+    torch.manual_seed(cfg.seed)
+    device = torch.device(cfg.device)
+
     # check arguments
     if cfg.load_from is None:
         raise ValueError('"load_from" must be specified to load a model from a checkpoint.')
@@ -144,10 +155,8 @@ def test(cfg: DictConfig):
         load_from = [cfg.load_from]
     else:
         load_from = cfg.load_from
+    
 
-    # set seed and device
-    torch.manual_seed(cfg.seed)
-    device = torch.device(cfg.device)
 
     # dataset and dataloader are the same for all tests
     dataset = instantiate(cfg.dataset)
@@ -158,6 +167,13 @@ def test(cfg: DictConfig):
         shuffle=False, 
         num_workers=cfg.test.num_workers, 
         pin_memory=True)
+    
+    # if a model is provided in the config file, load it
+    model = None
+    if 'model' in cfg:
+        print('Instantiating new model from config file. \nIf you want to load a model from a checkpoint, remove the "model" field from the config file.')
+        model = instantiate(cfg.model)
+        model = model.to(device)
 
     
     # prepare dictionaries to store per-experiment results
@@ -170,18 +186,19 @@ def test(cfg: DictConfig):
         logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
 
 
-        model_checkpoint = get_checkpoint_path(experiment_dir)
-        print('Loading model from checkpoint: ', model_checkpoint)
+        model_checkpoint_path = get_checkpoint_path(experiment_dir)
+        print('Loading model from checkpoint: ', model_checkpoint_path)
 
         # validate
         results_per_budget, results_per_flops = validate(
-            model_checkpoint, 
+            model_checkpoint_path, 
             logger,
             val_loader, 
             budgets=cfg.test.budgets,
             noise_settings=cfg.noise,
             noises=cfg.test.noises,
             device=device,
+            model=model,
             )
         
         # these might be <buget -> noise -> acc > or <budget, acc>

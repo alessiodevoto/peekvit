@@ -61,7 +61,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     ax.set_ylabel('Accuracy')
     ax.set_title('Budget vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ylim([0.3, 0.9])
+    # plt.ylim([0.2, 0.9])
     plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
 
     fig, ax = plt.subplots()
@@ -70,7 +70,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     ax.set_ylabel('Accuracy')
     ax.set_title('Budget vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ylim([0.3, 0.9])
+    # plt.ylim([0.2, 0.9])
     plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
 
 
@@ -82,7 +82,7 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
       ax.set_xlabel('Budget')
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
-      plt.ylim([0.4, 0.9])
+      # plt.ylim([0.2, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
     plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -94,7 +94,7 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
       ax.set_xlabel('Budget')
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
-      plt.ylim([0.4, 0.9])
+      # plt.ylim([0.2, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
     plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -110,7 +110,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
 
-    plt.ylim([0.4, 0.9])
+    # plt.ylim([0.2, 0.9])
     plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
 
 
@@ -121,7 +121,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
         ax.set_ylabel('Accuracy')
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
-    plt.ylim([0.4, 0.9])
+    # plt.ylim([0.4, 0.9])
     plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))"""
 
 
@@ -153,7 +153,7 @@ def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additio
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
             # set y range
-            # plt.ylim([0.1, 0.9])
+            # # plt.ylim([0.1, 0.9])
     
 
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -196,7 +196,7 @@ def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
   ax.set_title('Budget vs Accuracy')
 
   # set y range
-  # plt.ylim([0.4, 0.9])
+  # # plt.ylim([0.4, 0.9])
   plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
 
   # create save dir if it does not exist
@@ -259,7 +259,7 @@ def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
   ax.set_title('Noise vs Accuracy' if additional_label is None else f'Noise vs Accuracy ({additional_label})')
 
   # set y range
-  # plt.ylim([0.1, 0.9])
+  # # plt.ylim([0.1, 0.9])
 
   # create save dir if it does not exist
   if save_dir is not None:
@@ -310,7 +310,7 @@ def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = N
           ax.set_title('Noise vs Accuracy across budgets')
           ax.legend()
           # set y range
-          # plt.ylim([0.1, 0.9])
+          # # plt.ylim([0.1, 0.9])
 
           # create save dir if it does not exist
           if save_dir is not None:
@@ -348,7 +348,7 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
             # set y range
-            # plt.ylim([0.1, 0.9])
+            # # plt.ylim([0.1, 0.9])
 
             
             #x_ticks = [f'{x}({y})' for x,y in zip(results.keys(), additional_x_labels)] if additional_x_labels is not None else results.keys()

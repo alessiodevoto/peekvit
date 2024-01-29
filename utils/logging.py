@@ -15,7 +15,8 @@ class SimpleLogger:
         self.log(settings[0])
         
     
-    def log(self,  *args, **kwargs):
+    def log(self, *args, **kwargs):
+
         if self.counter in {0,-1}:
             print(*args, **kwargs)
             pprint(*args, **kwargs, stream=self.log_file)

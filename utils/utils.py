@@ -129,6 +129,27 @@ def get_learned_thresholds(model):
     return thresholds
 
 
+######################################################## Ranking ##################################################################
+
+def get_rankingvit_blocks(model):
+    """
+    Retrieves the RankingViT blocks from a given model.
+
+    Args:
+        model: The model from which to retrieve the RankingViT blocks.
+
+    Returns:
+        blocks: A dictionary containing the RankingViT blocks for each RankingViTBlock in the model.
+    """
+    from peekvit.models.rankvit import RankViTBlock
+    blocks = {}
+    for module_name, module in model.named_modules():
+        if isinstance(module, RankViTBlock):
+            blocks[module_name] = module
+    
+    return blocks
+
+
 ######################################################## Noise ##################################################################
 
 

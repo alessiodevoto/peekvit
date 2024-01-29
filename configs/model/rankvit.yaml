@@ -1,0 +1,10 @@
+_target_: peekvit.models.rankvit.RankVisionTransformer
+image_size: ${dataset.image_size}
+patch_size: 8
+num_classes: 10
+hidden_dim: 256
+mlp_dim: 768
+num_layers: 4
+num_heads: 4
+attention_dropout: 0.1
+dropout: 0.1
