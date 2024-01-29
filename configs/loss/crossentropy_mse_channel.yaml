@@ -9,4 +9,10 @@ additional_losses:
         _target_:  peekvit.utils.losses.MSELoss
         weight: 0.2
         strict: True
-        budget: null
+        budget: null    # budget will be sampled at runtime if null
+    channel:
+        _target_:  peekvit.utils.losses.ChannelMSELoss
+        weight: 0.2
+        strict: False
+        skip_layers: [0,1,3] # 4 layers model, channel is in the middle
+        budget: null    # budget will be sampled at runtime if null

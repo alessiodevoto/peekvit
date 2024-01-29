@@ -4,7 +4,7 @@ This repo uses [hydra](https://hydra.cc/) for managing experiment in a modular w
 
 Before testing, don't forget to `pip install -r requirements.txt`.
 
-### How To: run a quick experiment wiht default parameters
+### How To: run a quick experiment with default parameters
 - Edit the path to your workspace and wandb credentials in `train_config.yaml`. 
 - Run `python train/train.py` 
 
@@ -38,6 +38,7 @@ Plots for each run will be stored to the run experiment directory where the chec
 
 
 #### TODOS
-- fix local logging, now it has to many prints
-- fix the plots for comparing multiple runs
 - detailed comments for losses
+- Examples on comparative plots
+- Add images to readme
+- Add tiny imagenet

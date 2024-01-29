@@ -235,6 +235,33 @@ class MSELoss(ResidualModelLoss):
         return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
 
 
+class ChannelMSELoss(ResidualModelLoss):
+    """
+    Computes the MSE loss of the model. It is a copy of MSELoss with a different name. 
+    The reason for the different name is that this loss is supposed to be used for channel bandwith and not for general model budget.
+    """
+
+    def __init__(self, budget: float = None, strict: bool = False, skip_layers : List = [], **kwargs) -> None:
+        super().__init__()
+        self.budget = budget
+        self.strict = strict
+        self.skip_layers = skip_layers
+
+    def forward(self, model, channel_budget = None, **kwargs):
+        """
+        Computes the MSE loss of the model.
+
+        Args:
+            model (nn.Module): The model to compute the MSE loss for.
+            **kwargs: Additional arguments.
+
+        Returns:
+            torch.Tensor: The MSE loss.
+        """
+        assert channel_budget or self.budget, 'budget must be provided either as argument or as class attribute'
+        
+        return solo_mse(model, channel_budget if channel_budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
+
 class L1AndIntraEntropyLoss(ResidualModelLoss):
     """
     Computes the L1 loss and the intra-entropy of the model.
@@ -280,7 +307,7 @@ class LossCompose:
         at least the key _target_ that points to a class that can be instantiated by hydra. 
 
     Attributes:
-        additional_losses (defaultdict): A dictionary that stores the additional losses with their weights and loss functions.
+        additional_losses (defaultdict): A dictionary that stores the additional losses with their weights and loss functions. See losses yaml file for example.
 
     Methods:
         compute: Computes the total loss by evaluating each additional loss function.
