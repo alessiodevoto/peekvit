@@ -61,7 +61,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     ax.set_ylabel('Accuracy')
     ax.set_title('Budget vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    # plt.ylim([0.2, 0.9])
+    plt.ylim([0.1, 0.9])
     plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
 
     fig, ax = plt.subplots()
@@ -70,7 +70,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     ax.set_ylabel('Accuracy')
     ax.set_title('Budget vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    # plt.ylim([0.2, 0.9])
+    plt.ylim([0.1, 0.9])
     plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
 
 
@@ -82,7 +82,7 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
       ax.set_xlabel('Budget')
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
-      # plt.ylim([0.2, 0.9])
+      plt.ylim([0.1, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
     plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -94,7 +94,7 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
       ax.set_xlabel('Budget')
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
-      # plt.ylim([0.2, 0.9])
+      plt.ylim([0.1, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
     plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -110,7 +110,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
 
-    # plt.ylim([0.2, 0.9])
+    plt.ylim([0.1, 0.9])
     plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
 
 

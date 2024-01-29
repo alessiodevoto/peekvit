@@ -33,7 +33,7 @@ def res_linear_flops_counter_hook(module, input, output):
     module.__flops__ += int(torch.sum((input_last_dim * output_last_dim + bias_flops) * pre_last_dims_prod))
 
     if not hasattr(module, 'avg_sparsity'):
-        module.avg_sparsity = count_masked_tokens(input, per_sequence=False)
+        module.avg_sparsity = 0 #count_masked_tokens(input, per_sequence=False)
     else:
         masked_tokens = count_masked_tokens(input, per_sequence=False)
         module.avg_sparsity += masked_tokens
@@ -107,32 +107,10 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
     multihead_attention_module.__flops__ += int(flops.sum())
     
     if not hasattr(multihead_attention_module, 'avg_sparsity'):
-        multihead_attention_module.avg_sparsity = count_masked_tokens(q, per_sequence=False) 
+        multihead_attention_module.avg_sparsity = 0 #count_masked_tokens(q, per_sequence=False) 
     else:
         num_masked_tokens = count_masked_tokens(q, per_sequence=False) 
         multihead_attention_module.avg_sparsity += num_masked_tokens
-
-
-# this is the hook for a standard linear layer:
-# https://github.com/sovrasov/flops-counter.pytorch/blob/6a00a4fa13053f2891a7ce00405142f4ec201fbc/ptflops/pytorch_ops.py#L33
-# the difference is that we should exclude from the sequence the tokens that are masked out, i.e. all zeros
-# in some cases though this is not true, as we might have a layer norm that unzeroes the tokens
-# in that case, we should have a way to specify the amount of masked tokens to subtract from the flops
-# we do this at runtime, by checking if the module has an attribute num_masked_tokens
-def linear_flops_counter_hook(module, input, output):
-    num_masked_tokens = getattr(module, 'num_masked_tokens', 0)
-    input = input[0]
-    output_last_dim = output.shape[-1]
-    input_last_dim = input.shape[-1]
-    pre_last_dims_prod = np.prod(input.shape[0:-1], dtype=np.int64) - num_masked_tokens
-    bias_flops = output_last_dim if module.bias is not None else 0
-    module.__flops__ += int(torch.sum((input_last_dim * output_last_dim + bias_flops) * pre_last_dims_prod))
-
-
-    if not hasattr(module, 'avg_sparsity'):
-        module.avg_sparsity = num_masked_tokens
-    else:
-        module.avg_sparsity += num_masked_tokens
 
 
 
