@@ -47,7 +47,7 @@ class RankViTBlock(nn.Module):
         self.current_budget = 1.0
     
     @staticmethod
-    def sort(input: torch.Tensor):
+    def sort_tokens(input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
         class_token = input[:, 0:1, :]
@@ -70,7 +70,7 @@ class RankViTBlock(nn.Module):
     
 
     def mask_tokens(self, input: torch.Tensor):
-        if not self.training:
+        if not self.training or not self.sort_tokens:
             return input
 
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -101,13 +101,14 @@ class RankViTBlock(nn.Module):
     
 
     def drop_tokens(self, input: torch.Tensor):
+        if self.training or not self.sort_tokens:
+            return input
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         # we assume input is sorted in descending order
         # the last n% tokens are masked by setting them to 0
         # where n is the current budget
 
         num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
-
 
         return input[:, :num_tokens_to_keep, :]
     
@@ -116,13 +117,11 @@ class RankViTBlock(nn.Module):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
         if self.sort_tokens:
-            input = self.sort(input)
+            input = self.sort_tokens(input)
         
-        # mask tokens only has effect during training
-        input = self.mask_tokens(input)
-        
-        if not self.training:
-            input = self.drop_tokens(input)
+        # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
+        input = self.mask_tokens(input) # only has effect during training
+        input = self.drop_tokens(input) # only has effect during evaluation
 
         x = self.ln_1(input)  
         x = self.mask_tokens(x)      
