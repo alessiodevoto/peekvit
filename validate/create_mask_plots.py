@@ -27,54 +27,6 @@ from peekvit.utils.visualize import plot_masked_images
 
 
 
-def validate(
-        experiment_dir: str,
-        model_checkpoint: str, 
-        logger: Any,
-        images_to_plot: DataLoader, 
-        budgets: List,
-        device: torch.device,
-        ):
-    
-
-    # if model parameters are not specified in the config file, load the model from the checkpoint
-    model, _, epoch, _, _ = load_state(model_checkpoint, model=None, strict=True)
-    model.eval()
-    model.to(device)
-    
-
-    # sanity check that model has budget
-    if not hasattr(model, 'set_budget'):
-        print('Model does not have budget, setting to None')
-        budgets = budgets or [1.0]
-    
-    if budgets is None or len(budgets) == 0:
-        print('Budgets not specified, setting to None')
-        budgets = [1.1]
-    
-    
-    
-    for budget in budgets:
-
-        if hasattr(model, 'set_budget'):
-            model.set_budget(budget)
-        
-        images = plot_masked_images(
-                        model,
-                        images_to_plot,
-                        model_transform=None,
-                        visualization_transform=None,
-                        hard=True,
-                    )
-            
-        print(images.keys())
-        os.makedirs(f'{experiment_dir}/images', exist_ok=True)
-        for img_name, img in images.items():
-            plt.savefig(f'{experiment_dir}/images/{img_name}.png')
-
-
-
-
 @hydra.main(version_base=None, config_path="../configs", config_name="test_config")
 @torch.no_grad()
 def test(cfg: DictConfig):
@@ -109,7 +61,7 @@ def test(cfg: DictConfig):
     for experiment_dir in load_from:
 
         experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
-        logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
+
 
         # if model parameters are not specified in the config file, load the model from the checkpoint
         model_checkpoint = get_checkpoint_path(experiment_dir)
@@ -139,9 +91,10 @@ def test(cfg: DictConfig):
                             hard=hard_mask,
                         )
             
-            os.makedirs(f'{experiment_dir}/images/budget_{budget}', exist_ok=True)
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
-                img.savefig(f'{experiment_dir}/images/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
+                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
 
      
 

@@ -114,7 +114,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
     plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
 
 
-    fig, ax = plt.subplots()
+    """fig, ax = plt.subplots()
     for budget, results in accs_per_flops.items():
         ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
         ax.set_xlabel('Noise')
@@ -122,7 +122,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
         ax.set_title('Noise vs Accuracy across budgets')
         ax.legend()
     plt.ylim([0.4, 0.9])
-    plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
+    plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))"""
 
 
 def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels=""):

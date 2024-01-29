@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
@@ -9,11 +10,15 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from pprint import pprint
+from torch.utils.data import Subset
+
 
 
 from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, make_experiment_directory
 from peekvit.models.topology import reinit_class_tokens, train_only_these_params
 from peekvit.utils.losses import LossCompose
+from peekvit.utils.visualize import plot_masked_images
+
 
 
 
@@ -128,8 +133,36 @@ def train(cfg: DictConfig):
             logger.log({'val/accuracy': acc, 'val/loss': val_loss})
         
         return acc, val_loss
-    
 
+
+    # Aux function to plot masks during training   
+    # Assumes model has budget 
+    def plot_masks_in_training(model, budgets):
+        
+        subset_idcs = torch.arange(0, len(val_dataset), len(val_dataset)//training_args['num_images_to_plot'])
+        images_to_plot = Subset(val_dataset, subset_idcs)
+        hard_prefix = 'hard_'
+
+        for budget in budgets:
+
+            model.set_budget(budget)
+            
+            images = plot_masked_images(
+                            model,
+                            images_to_plot,
+                            model_transform=None,
+                            visualization_transform=dataset.denormalize_transform,
+                            hard=True,
+                        )
+            
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
+            for i, (_, img) in enumerate(images.items()):
+                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
+        
+        
+    
+    # Training
     for epoch in range(training_args['num_epochs']+1):
 
         train_epoch(model, train_loader, optimizer, epoch)
@@ -139,6 +172,13 @@ def train(cfg: DictConfig):
             
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
             save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
+        
+        if training_args['plot_masks_every'] != -1 and epoch % training_args['plot_masks_every'] == 0:
+            if hasattr(model, 'set_budget'):
+                plot_masks_in_training(model, cfg.training.val_budgets)
+            else:
+                print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
+            
 
 
 

@@ -6,17 +6,22 @@ class SimpleLogger:
     """
     Simple logger for logging to stdout and to a file.
     """
-    def __init__(self, settings, dir):
+    def __init__(self, settings, dir, log_every=500):
         self.log_file_path = os.path.join(dir, 'log.txt')
         os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
         self.log_file = open(self.log_file_path, 'a+')
+        self.every = log_every
+        self.counter = -1
         self.log(settings[0])
+        
     
     def log(self,  *args, **kwargs):
-        
-        print(*args, **kwargs)
-        pprint(*args, **kwargs, stream=self.log_file)
-        self.log_file.flush()
+        if self.counter in {0,-1}:
+            print(*args, **kwargs)
+            pprint(*args, **kwargs, stream=self.log_file)
+            self.log_file.flush()
+        self.counter += 1
+        self.counter %= self.every
     
     def close(self):
         self.log_file.close()
