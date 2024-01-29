@@ -45,11 +45,11 @@ def validate(
 
     # sanity check that model has budget
     if not hasattr(model, 'set_budget'):
-        print('Model does not have budget, setting to None')
-        budgets = budgets or [1.0]
+        print('Model does not have budget, setting to default value 1.1')
+        budgets = [1.0]
     
     if budgets is None or len(budgets) == 0:
-        print('Budgets not specified, setting to None')
+        print('Budgets not specified, setting to default value 1.0')
         budgets = [1.0]
     
     # add noise module
@@ -187,7 +187,8 @@ def test(cfg: DictConfig):
         # these might be <buget -> noise -> acc > or <budget, acc>
         # in the first case we need to plot the results with noise
         noises = cfg.test.noises
-        if noises is not None and len(noises) > 0:
+        validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
+        if validating_with_noise:
             plot_budget_and_noise_recap(
                 accs_per_budget=results_per_budget,
                 accs_per_flops =results_per_flops,
@@ -202,8 +203,8 @@ def test(cfg: DictConfig):
         all_results_per_budget[experiment_dir] = results_per_budget
         all_results_per_flops[experiment_dir] = results_per_flops
     
-    # plot cumulative results
-    if cfg.test.cumulative_plot:
+    # plot cumulative results in case we have more than one experiment
+    if cfg.test.cumulative_plot and len(load_from) > 1:
         
         cumulative_plot_dir = cfg.test.cumulative_plot_dir
         os.makedirs(cfg.test.cumulative_plot_dir, exist_ok=True)
@@ -211,7 +212,8 @@ def test(cfg: DictConfig):
         
 
         noises = cfg.test.noises
-        if noises is not None and len(noises) > 0:
+        validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
+        if validating_with_noise:
             plot_cumulative_budget_and_noise_recap(
                 all_results_per_flops, 
                 additional_x_labels=cfg.test.budgets,

@@ -24,7 +24,7 @@ load_from: #['${experiments_dir}/2024_01_16_14_32_13_vit_bb_16_sb_'] #, '${exper
 defaults:
   - logger: local
   - dataset: imagenette
-  - noise: drop 
+  - noise: no_noise 
   - test: base
   - _self_
 
