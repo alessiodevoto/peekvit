@@ -11,7 +11,7 @@ from .blocks import SelfAttention, MLP
 from einops import reduce
  
 """
-Plain Vision Transformer.
+Vision Transformer that ranks tokens in each layer of the encoder.
 """
 
 
