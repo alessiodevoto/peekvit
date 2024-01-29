@@ -94,7 +94,11 @@ def train(cfg: DictConfig):
             main_loss = main_criterion(out, labels) 
             add_loss_dict, add_loss_val = {}, 0
             if additional_losses is not None:
-                add_loss_dict, add_loss_val = additional_losses.compute(model, budget=model.current_budget, dict_prefix='train/')
+                add_loss_dict, add_loss_val = additional_losses.compute(
+                    model, 
+                    budget=model.current_budget,
+                    channel_budget=model.current_channel_budget, 
+                    dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()
             optimizer.step()
