@@ -5,3 +5,4 @@ notes.txt
 **outputs**
 **wandb/
 **imagenette_dataset/
+tests_test_tiny_imagenet.py
