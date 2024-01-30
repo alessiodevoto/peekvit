@@ -709,7 +709,7 @@ def plot_class_tokens(model, input, save_dir=None, savepath=None):
 
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
-      plt.savefig(join(save_dir, f'class_tokens.jpg'), dpi=100)
+      plt.savefig(join(save_dir, f'class_tokens.jpg'), dpi=200)
     elif savepath is not None:
       plt.savefig(savepath, dpi=100)
     

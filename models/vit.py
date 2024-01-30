@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List
 from abc import ABC
+from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
+
 
 from .blocks import SelfAttention, MLP
  
@@ -110,6 +112,7 @@ class VisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         num_class_tokens: int = 1,
+        torch_pretrained_weights: Optional[str] = None,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -162,6 +165,13 @@ class VisionTransformer(nn.Module):
         nn.init.trunc_normal_(self.conv_proj.weight, std=math.sqrt(1 / fan_in))
         if self.conv_proj.bias is not None:
             nn.init.zeros_(self.conv_proj.bias)
+        
+
+        if torch_pretrained_weights is not None:
+            from .adapters import adapt_torch_state_dict
+            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict()
+            adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:

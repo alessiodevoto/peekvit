@@ -72,7 +72,7 @@ def from_vit_to_eeresidual_vit(vit_checkpoint, residual_vit_args:dict = None):
     return residual_vit, model_args
 
 
-def adapt_torch_state_dict(state_dict: nn.Module, num_classes:int):
+def adapt_torch_state_dict(state_dict, num_classes:int):
     """
     Adapt the weights of a Pytorch Vision Transformer state dictionary to a VisionTransformer as defined in this repository. 
     Possibly edit the head to match the number of classes.

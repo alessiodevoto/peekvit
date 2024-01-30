@@ -71,7 +71,9 @@ def test(cfg: DictConfig):
 
     # check arguments
     if cfg.load_from is None:
-        raise ValueError('"load_from" must be specified to load a model from a checkpoint.')
+        print('No model checkpoint provided.')
+        l, _ = make_experiment_directory(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+        load_from = [l]
     elif isinstance(cfg.load_from, str):
         load_from = [cfg.load_from]
     else:
@@ -99,7 +101,7 @@ def test(cfg: DictConfig):
         experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
         logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
 
-
+        
         model_checkpoint_path = get_checkpoint_path(experiment_dir)
         print('Loading model from checkpoint: ', model_checkpoint_path)
 
