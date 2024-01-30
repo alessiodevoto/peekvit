@@ -312,4 +312,5 @@ class RankVisionTransformer(nn.Module):
     def set_budget(self, budget: float):
         self.current_budget = budget
         for rankvitblock in self.encoder.layers:
-            rankvitblock.set_budget(budget)
+            if hasattr(rankvitblock, 'set_budget'):
+                rankvitblock.set_budget(budget)

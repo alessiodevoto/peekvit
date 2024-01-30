@@ -205,6 +205,7 @@ def test(cfg: DictConfig):
         # in the first case we need to plot the results with noise
         noises = cfg.test.noises
         validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
+        print('Validating with noise: ', validating_with_noise)
         if validating_with_noise:
             plot_budget_and_noise_recap(
                 accs_per_budget=results_per_budget,
@@ -221,15 +222,15 @@ def test(cfg: DictConfig):
         all_results_per_flops[experiment_dir] = results_per_flops
     
     # plot cumulative results in case we have more than one experiment
-    if cfg.test.cumulative_plot and len(load_from) > 1:
+    if cfg.test.cumulative_plot:
         
         cumulative_plot_dir = cfg.test.cumulative_plot_dir
         os.makedirs(cfg.test.cumulative_plot_dir, exist_ok=True)
         print('Saving cumulative plots to ', cumulative_plot_dir)
         
 
-        noises = cfg.test.noises
-        validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
+        # noises = cfg.test.noises
+        # validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
         if validating_with_noise:
             plot_cumulative_budget_and_noise_recap(
                 all_results_per_flops, 
