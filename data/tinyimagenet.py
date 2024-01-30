@@ -42,7 +42,7 @@ class TinyImageNet:
                     
   IMAGENETTE_CLASSES = None #TODO
 
-  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 224):
+  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 224, **kwargs):
     self.root = root
     self.train_transform = train_transform
     self.test_transform = test_transform
@@ -50,6 +50,9 @@ class TinyImageNet:
     self.image_size = image_size
     self.denormalize_transform = self.TINY_IMAGENET_DENORMALIZE_TRANSFORM
     self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_tiny_imagenet(root, train_transform, test_transform, target_transform, image_size)
+    
+    if 'num_classes' in kwargs:
+      print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset')
 
   @staticmethod
   def normalize_tin_val_folder_structure(path,

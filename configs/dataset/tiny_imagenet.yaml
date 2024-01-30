@@ -1,0 +1,4 @@
+_target_: peekvit.data.tinyimagenet.TinyImageNet
+root: '/hdd2/aledev/datasets'
+image_size: 224       # used by default by model as well 
+num_classes: 200

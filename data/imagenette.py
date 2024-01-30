@@ -40,7 +40,7 @@ class Imagenette:
   IMAGENETTE_CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church', 'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
 
-  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160):
+  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160, **kwargs):
     self.root = root
     self.train_transform = train_transform
     self.test_transform = test_transform
@@ -49,6 +49,8 @@ class Imagenette:
     self.denormalize_transform = self.IMAGENETTE_DENORMALIZE_TRANSFORM
     self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_imagenette(root, train_transform, test_transform, target_transform, image_size)
 
+    if 'num_classes' in kwargs:
+       print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset')
 
   def get_imagenette_transforms(self, image_size: int = 160):
       """

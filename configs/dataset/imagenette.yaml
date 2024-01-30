@@ -1,3 +1,4 @@
 _target_: peekvit.data.imagenette.Imagenette
 root: '${workspace}/imagenette_dataset'
 image_size: 160 # used by default by model as well 
+num_classes: 10

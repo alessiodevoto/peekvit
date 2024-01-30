@@ -1,7 +1,7 @@
 _target_: peekvit.models.moevit.MoEVisionTransformer
+num_classes: ${dataset.num_classes}
 image_size: ${dataset.image_size}
 patch_size: 8
-num_classes: 10
 hidden_dim: 256
 mlp_dim: 768
 num_layers: 4
