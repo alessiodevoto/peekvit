@@ -1,5 +1,6 @@
 from collections import defaultdict
 import os
+import re
 from matplotlib import cm
 import torch
 import matplotlib.pyplot as plt
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 from os.path import join
 import numpy as np
 from pathlib import Path
+from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names
+
 
 import wandb
 
@@ -372,8 +375,6 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
     return fig
 
 
-
-
 ######################################################## MoEs ##################################################################
 
 
@@ -543,7 +544,6 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
   return figs
   
 
-
 @torch.no_grad()
 def img_mask_distribution(
   model, 
@@ -645,6 +645,112 @@ def img_mask_distribution(
   plt.close()
 
 
+######################################################## Common ##################################################################
+
+@torch.no_grad()
+def get_cls_tokens(model, input):
+    """
+    Retrieves the class tokens from the model's output.
+
+    Args:
+      model (torch.nn.Module): The model to extract class tokens from.
+      input (torch.Tensor): The input tensor to the model.
+
+    Returns:
+      dict: A dictionary mapping exit module name to its class token output.
+    """
+    
+    num_class_tokens = getattr(model, 'num_class_tokens', 1)
+    if num_class_tokens > 1:
+      raise NotImplementedError('Only one class token is supported at the moment.')
+    
+    # get all layers with a regex
+    all_layers = " ".join(get_graph_node_names(model)[0])
+    pattern = re.compile(r'encoder\.layers\.\d+')
+    matches = list(set(pattern.findall(all_layers)))
+
+    # dictioanry mapping layer name to personal exit name
+    # see https://pytorch.org/vision/main/generated/torchvision.models.feature_extraction.create_feature_extractor.html?highlight=create_feature_extractor#torchvision.models.feature_extraction.create_feature_extractor
+    exit_modules = {layer: f'layer_{i}' for i, layer in enumerate(matches)}
+
+    model = create_feature_extractor(model, exit_modules)
+    out = model(make_batch(input))
+
+    # out is a dictionary mapping exit module name to its output
+    # the class token is the first token of the output
+    out = {key: value[:, :1] for key, value in out.items()}
+
+    return out
+
+
+@torch.no_grad()
+def plot_class_tokens(model, input, save_dir=None, savepath=None):
+    """
+    Plots the class tokens of a given model and input.
+
+    Args:
+        model (torch.nn.Module): The model to visualize.
+        input (torch.Tensor): The input to the model.
+        save_dir (str, optional): The directory to save the plot. Defaults to None.
+        savepath (str, optional): The path to save the plot. Defaults to None.
+    """
+
+    # xor save_dir and savepath
+    assert (save_dir is None) != (savepath is None), 'Either save_dir or savepath must be specified, but not both.'
+
+    cls_tokens = get_cls_tokens(model, input)
+
+    all_exits = torch.stack(list(cls_tokens.values()))
+    data_np = all_exits.squeeze().t().cpu().numpy()
+    
+    plt.imshow(data_np, cmap='viridis', aspect='auto')
+    plt.xlabel('transformer layer')
+    plt.ylabel('dimension')
+
+    if save_dir is not None:
+      os.makedirs(save_dir, exist_ok=True)
+      plt.savefig(join(save_dir, f'class_tokens.jpg'), dpi=100)
+    elif savepath is not None:
+      plt.savefig(savepath, dpi=100)
+    
+    plt.close()
+
+    
+
+@torch.no_grad()
+def plot_class_tokens_distances(model, input, save_dir=None, savepath=None):
+    
+    # xor save_dir and savepath
+    assert (save_dir is None) != (savepath is None), 'Either save_dir or savepath must be specified, but not both.'
+   
+    cls_tokens = get_cls_tokens(model, input)
+    all_exits = torch.stack(list(cls_tokens.values()))
+
+    # we compute the distance between each pair of class tokens and display it as a heatmap
+    distances = torch.cdist(all_exits.squeeze(), all_exits.squeeze())
+
+    plt.imshow(distances.cpu().numpy(), cmap='viridis', aspect='auto')
+
+    # adjust labels and move xtickts to top
+    plt.xticks(np.arange(len(cls_tokens)), sorted(list(cls_tokens.keys())))
+    plt.yticks(np.arange(len(cls_tokens)), sorted(list(cls_tokens.keys())))
+    plt.tick_params(axis='x', which='both', bottom=False, top=True, labelbottom=False, labeltop=True)
+    plt.colorbar()
+
+
+    if save_dir is not None:
+      os.makedirs(save_dir, exist_ok=True)
+      plt.savefig(join(save_dir, f'class_tokens_distances.jpg'), dpi=100)
+    elif savepath is not None:
+      plt.savefig(savepath, dpi=100)
+    
+    plt.close()
+    
+    
+
+
+  
+  
 
 ######################################################## Example usage ##################################################################
 
@@ -662,112 +768,3 @@ token_distribution(model, [torch.stack([resized_image, resized_image], dim=0)], 
 """
 
 
-######################################################## Old ##################################################################
-
-"""@torch.no_grad()
-def expert_distribution(model, images: List, save_dir: str=None):
-
-
-    model.eval()
-    device = get_model_device(model)
-
-    image_size = max(images[0].shape[-1], images[0].shape[0]) # it could be channel first or channel last
-    patch_size = model.patch_size
-    patches_per_side = (image_size // patch_size)
-
-    for img, label in images:  
-
-        # forward pass      
-        img = make_batch(img)
-        model(img.to(device))
-        
-        # retrieve last forward gating probs
-        gates = get_last_forward_gates(model)  # <moe, gating_probs>
-
-        # for each moe layer, plot the distribution of experts
-        for moe_name, gating_probs in gates.items():
-            
-            # we assume top-1 gating  
-            # gating probs is batch, tokens, exp
-            max_vals, max_idx = gating_probs.max(dim=-1)
-            batch_masks = max_idx[:, 1:].reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
-
-            # prepare plot, each row is an image, first column is the image, second column is the expert distribution
-            fig, axs = plt.subplots(img.shape[0], 2, squeeze=False)
-
-            # for each image
-            for i in range(img.shape[0]):
-                img, mask = img[i], batch_masks[i]
-                img, mask = prepare_for_matplotlib(img), prepare_for_matplotlib(mask)
-                axs[i, 0].imshow(img)
-                axs[i, 1].imshow(mask)
-            
-            plt.suptitle(moe_name)
-            if save_dir is not None:
-                subset_save_dir = f'{save_dir}/{moe_name.split(".")[-2]}/'
-                os.makedirs(subset_save_dir, exist_ok=True)
-                plt.savefig(subset_save_dir+f'expert_distribution_batch_{i}.jpg')"""
-
-
-
-"""@torch.no_grad()
-def token_distribution(model, loader, save_dir=None, image_size = None):
-  # TODO not working for now
-  model.eval()
-  device = get_model_device(model)
-
-  patch_size = model.patch_size
-  if image_size is None:
-    image_size = model.image_size
-
-  patch_size = model.patch_size
-  patches_per_side = (image_size // patch_size)
-
-
-
-  for elem, label in tqdm(loader):
-    batch = make_batch(elem)
-    model(batch.to(device))
-
-    # get dictionary <moe_name, gating_probs> where gating probs is batch, tokens, exp
-    gates = get_last_forward_gates(model) 
-
-    # reshape image as sequence of tokens
-    unrolled_batch = rearrange(batch, 
-                               "b c (h s1) (w s2) -> b (h w) s1 s2 c ", 
-                               s1=patch_size, s2=patch_size) # b, tokens, patch_size, patch_size, c
-
-    for moe_name, gating_probs in gates.items():
-      
-      # get token-expert assignment by maximizing token prob
-      max_vals, max_idx = gating_probs.max(dim=-1) # max_vals is a (b, tokens)
-      # discard class token 
-      batch_masks = max_idx[:, 1:] 
-    
-
-      fig, axs = plt.subplots(batch.shape[0], 2, squeeze=False)
-
-
-      # for each image
-      for i in range(batch.shape[0]):
-        width = batch[0].shape[-1]
-        print(width)
-        tokens, mask = unrolled_batch[i], batch_masks[i] # tokens, patch_size, patch_size, channels - tokens
-        print(tokens.shape, mask.shape)
-        sorted_mask, sorted_idx = torch.sort(mask)
-        print(mask)
-        print(sorted_idx)
-        sorted = torch.index_select(tokens, 0, sorted_idx)
-        #sorted = sorted.reshape(width, width, -1)
-        # sorted = rearrange(sorted, 't a b c ->  (t a) b c)') # 16, 4, 4, 3 -> 
-        sorted = rearrange(sorted, 'b1 h w c -> h (b1 w) c', b1=patches_per_side**2)
-        # sorted = rearrange(sorted, 'b1 h w c -> h (b1 w)  c', b1=patch_size)
-        axs[i, 0].imshow(sorted)
-        axs[i, 1].imshow(sorted_mask.reshape(-1, patches_per_side*patches_per_side)) #.permute(1,0))
-      
-            
-      plt.suptitle(moe_name)
-    
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-        plt.savefig(f'{save_dir}/{moe_name.split(".")[-2]}/token_distribution_batch_{i}.jpg')"""

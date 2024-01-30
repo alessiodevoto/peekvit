@@ -1,13 +1,11 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from collections import OrderedDict
 import math
 from typing import Optional, List
 from abc import ABC
 
 from .blocks import SelfAttention, MLP
-from einops import reduce
  
 """
 Plain Vision Transformer.
@@ -126,7 +124,7 @@ class VisionTransformer(nn.Module):
         self.num_heads = num_heads
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
-
+        
 
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
@@ -206,7 +204,7 @@ class VisionTransformer(nn.Module):
 
         # Get all class tokens and average them
         x = x[:, 0:self.num_class_tokens]
-        x = reduce(x, 'n c e -> n e', reduction='sum')
+        x = torch.sum(x, dim=1)
 
         # Classification head
         x = self.head(x)
