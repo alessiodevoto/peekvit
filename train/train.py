@@ -81,7 +81,7 @@ def train(cfg: DictConfig):
 
     # training
     optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
@@ -94,7 +94,7 @@ def train(cfg: DictConfig):
             optimizer.zero_grad()
             out = model(batch)
             main_loss = main_criterion(out, labels) 
-            add_loss_dict, add_loss_val = {}, 0
+            add_loss_dict, add_loss_val = {}, 0.0
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(
                     model, 
@@ -107,7 +107,8 @@ def train(cfg: DictConfig):
             if training_args['clip_grad_norm'] is not None:
                 clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
-            logger.log({'train/total_loss': main_loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
+            logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
+        logger.log({'train/lr': scheduler.get_last_lr()[0]})
         scheduler.step()
 
     @torch.no_grad()

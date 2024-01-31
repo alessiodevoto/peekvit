@@ -15,7 +15,7 @@ Vision Transformer that ranks tokens in each layer of the encoder.
 """
 
 
-# ViT MoE Block
+# Rank ViT Block
 class RankViTBlock(nn.Module):
     """Transformer encoder block."""
 

@@ -14,7 +14,7 @@ Plain Vision Transformer.
 """
 
 
-# ViT MoE Block
+# ViT Block
 class ViTBlock(nn.Module):
     """Transformer encoder block."""
 
