@@ -259,6 +259,9 @@ def get_checkpoint_path(experiment_dir, epoch='last'):
         str: The path of the checkpoint corresponding to the given epoch in the experiment directory.
     """
     checkpoints_dir = join(experiment_dir, 'checkpoints')
+    
+    if not os.path.exists(checkpoints_dir) or os.listdir(checkpoints_dir) == []:
+        return None
 
     if epoch is None or epoch == 'last':
         checkpoint = sorted(os.listdir(checkpoints_dir))[-1]

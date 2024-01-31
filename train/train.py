@@ -80,8 +80,9 @@ def train(cfg: DictConfig):
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
     # training
-    optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
+    optimizer = torch.optim.SGD(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
+    # optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
+    scheduler = None #torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
@@ -108,8 +109,9 @@ def train(cfg: DictConfig):
                 clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
             logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
-        logger.log({'train/lr': scheduler.get_last_lr()[0]})
-        scheduler.step()
+        if scheduler:
+            logger.log({'train/lr': scheduler.get_last_lr()[0]})
+            scheduler.step()
 
     @torch.no_grad()
     def validate_epoch(model, loader, epoch, budget=''):

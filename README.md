@@ -56,3 +56,4 @@ You will find the masking plots for the number of images you requested inside th
 - Add tiny imagenet
 - Add a script for each howto
 - default cumulative noise plot when testing noise
+- add optimizer choice
