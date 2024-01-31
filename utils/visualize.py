@@ -707,6 +707,11 @@ def plot_class_tokens(model, input, save_dir=None, savepath=None):
     plt.xlabel('transformer layer')
     plt.ylabel('dimension')
 
+    # add vertical lines to separate transformer layers
+    for i in range(1, len(cls_tokens)):
+      plt.axvline(x=i - 0.5, color='white', linewidth=2)
+    
+
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
       plt.savefig(join(save_dir, f'class_tokens.jpg'), dpi=200)
