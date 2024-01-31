@@ -42,14 +42,16 @@ class TinyImageNet:
                     
   IMAGENETTE_CLASSES = None #TODO
 
-  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 224, **kwargs):
+  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 224, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
     self.root = root
     self.train_transform = train_transform
     self.test_transform = test_transform
     self.target_transform = target_transform
     self.image_size = image_size
+    self.augmentation_ops = augmentation_ops
+    self.augmentation_magnitude = augmentation_magnitude
     self.denormalize_transform = self.TINY_IMAGENET_DENORMALIZE_TRANSFORM
-    self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_tiny_imagenet(root, train_transform, test_transform, target_transform, image_size)
+    self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_tiny_imagenet(root, train_transform, test_transform, target_transform)
     
     if 'num_classes' in kwargs:
       print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset')
@@ -92,26 +94,26 @@ class TinyImageNet:
       os.sync()
 
 
-  def get_imagenet_transforms(self, image_size: int = 224):
+  def get_imagenet_transforms(self):
       """
-      Returns the default train and test transforms for the TinyImagenet dataset.
+      Returns the default train and test transforms for the Imagenette dataset.
       
       Args:
-        image_size (int, optional): The size of the images. Default is 224.
+        image_size (int, optional): The size of the images. Default is 160.
       
       Returns:
         tuple: A tuple containing (train transform, test transform).
 
       """
       test_transform  =  T.Compose([
-                          T.Resize(image_size),
-                          T.CenterCrop(image_size),
+                          T.Resize((self.image_size, self.image_size)),
+                          T.CenterCrop(self.image_size),
                           T.ToTensor(),
                           T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
       train_transform =  T.Compose([
-                          T.RandomResizedCrop(image_size),
-                          T.RandomHorizontalFlip(),
+                          T.RandAugment(num_ops=self.augmentation_ops, magnitude=self.augmentation_magnitude),
+                          T.Resize((self.image_size, self.image_size)),
                           T.ToTensor(),
                           T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
       
@@ -119,7 +121,7 @@ class TinyImageNet:
   
 
 
-  def get_tiny_imagenet(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160):
+  def get_tiny_imagenet(self, root, train_transform=None, test_transform=None, target_transform=None):
       """
       Retrieves the TinyImagenet dataset from the specified root directory.
       If transforms are not specified, the default transforms are used.
@@ -137,7 +139,7 @@ class TinyImageNet:
       """
 
       # get default transforms if not specified
-      _train_transform, _test_transform = self.get_imagenet_transforms(image_size=image_size)
+      _train_transform, _test_transform = self.get_imagenet_transforms()
       train_transform = train_transform or _train_transform
       test_transform = test_transform or _test_transform
 

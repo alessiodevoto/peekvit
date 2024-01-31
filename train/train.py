@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 import torch
+from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
 import torchmetrics
 import hydra
@@ -79,7 +80,8 @@ def train(cfg: DictConfig):
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
     # training
-    optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'])
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
@@ -101,9 +103,12 @@ def train(cfg: DictConfig):
                     dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()
+            # Apply gradient clipping
+            if training_args['clip_grad_norm'] is not None:
+                clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
             logger.log({'train/total_loss': main_loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
-
+        scheduler.step()
 
     @torch.no_grad()
     def validate_epoch(model, loader, epoch, budget=''):
