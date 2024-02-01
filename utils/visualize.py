@@ -542,6 +542,7 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
   plt.close()
   
   return figs
+
   
 
 @torch.no_grad()
@@ -753,6 +754,45 @@ def plot_class_tokens_distances(model, input, save_dir=None, savepath=None):
     
     
 
+def plot_reconstructed_images(model, images_to_plot, model_transform, visualization_transform):
+  model.eval()
+  device = get_model_device(model)
+  figs = {}
+  
+  i = 0
+  for img, label in tqdm(images_to_plot, desc='Preparing reconstructed images plots'):
+    
+    # forward pass
+    _img = model_transform(img) if model_transform is not None else img
+    
+    # model.set_budget(budget)
+    out, reconstructed = model(make_batch(_img).to(device)) 
+
+
+    # prepare plot, we want a row for each residual layer,
+    # and two columns, one for the image and one for token masks
+    fig, axs = plt.subplots(2, 1, squeeze=False, figsize=(10, 25))
+
+    # plot the image
+    img = prepare_for_matplotlib(visualization_transform(img) if visualization_transform is not None else img)
+    axs[0,0].imshow(img)
+    axs[0,0].title.set_text('Original image')
+
+    # plot the reconstructed image
+    reconstructed = prepare_for_matplotlib(reconstructed.squeeze())
+    axs[1,0].imshow(reconstructed)
+    axs[1,0].title.set_text('Reconstructed image')
+
+    fig.tight_layout()
+
+    figs[f'reconstructed_{i}'] = fig
+    i+=1
+
+  
+  return figs
+  
+  
+ 
 
   
   
