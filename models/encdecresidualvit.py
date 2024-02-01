@@ -7,10 +7,13 @@ from abc import ABC
 from einops import reduce
 
 from .blocks import SelfAttention, MLP, GumbelSigmoid, SigmoidWithTemp
+from .vitdecoder import VisionTransformerDecoder
 
 """
-A Vision Transformer with Residual Gating which can be placed at any layer.
+A Vision Transformer with Residual Gating which can be placed at any layer
+and a Decoder which can be used to reconstruct the input image.
 """
+
 
 class ResidualModule(ABC, nn.Module):
   pass
@@ -342,7 +345,7 @@ class ResidualViTEncoder(nn.Module):
 
 
 
-class ResidualVisionTransformer(nn.Module):
+class ResidualVisionTransformerWithDecoder(nn.Module):
     """
     Residual Vision Transformer model for image classification.
 
@@ -376,6 +379,13 @@ class ResidualVisionTransformer(nn.Module):
             - 'learnable' to add a learnable budget token and sample a value between 0 and 1 to multiply to it
             - learnable interpolate to have 2 trainable budget tokens and sample a value (budget) to interpolate between them.  
             For now, the same budget is sampled for each batch. Defaults to False.
+        
+        decoder_hidden_dim (int, optional): The dimensionality of the hidden layers in the decoder. Defaults to same as encoder.
+        decoder_num_layers (int, optional): The number of layers in the decoder. Defaults to same as encoder.
+        decoder_num_heads (int, optional): The number of attention heads in each layer of the decoder. Defaults to same as encoder..
+        decoder_mlp_dim (int, optional): The dimensionality of the MLP layers in the decoder.Defaults to same as encoder.
+        decoder_dropout (float, optional): The dropout rate for the decoder. Defaults to same as encoder.
+        decoder_attention_dropout (float, optional): The dropout rate for attention layers in the decoder. Defaults to same as encoder.
     """
 
     def __init__(
@@ -400,6 +410,13 @@ class ResidualVisionTransformer(nn.Module):
         gate_threshold: float = 0.5,
         sample_budget: Union[bool, List] = False,
         add_budget_token: Union[bool, List, Literal['learnable', 'learnable_interpolate']] = False,
+
+        decoder_hidden_dim: int = None,
+        decoder_num_layers: int = None,
+        decoder_num_heads: int = None,
+        decoder_mlp_dim: int = None,
+        decoder_dropout: float = 0.0,
+        decoder_attention_dropout: float = 0.0,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -478,6 +495,28 @@ class ResidualVisionTransformer(nn.Module):
         nn.init.trunc_normal_(self.conv_proj.weight, std=math.sqrt(1 / fan_in))
         if self.conv_proj.bias is not None:
             nn.init.zeros_(self.conv_proj.bias)
+        
+
+        # Decoder
+        self.decoder_hidden_dim = decoder_hidden_dim or hidden_dim
+        self.decoder_num_layers = decoder_num_layers or num_layers
+        self.decoder_num_heads = decoder_num_heads or num_heads
+        self.decoder_mlp_dim = decoder_mlp_dim or mlp_dim
+        self.decoder_dropout = decoder_dropout or dropout
+        self.decoder_attention_dropout = decoder_attention_dropout or attention_dropout
+
+        self.decoder = VisionTransformerDecoder(
+            image_size=image_size,
+            patch_size=patch_size,
+            num_layers=self.decoder_num_layers,
+            num_heads=self.decoder_num_heads,
+            hidden_dim=self.decoder_hidden_dim,
+            mlp_dim=self.decoder_mlp_dim,
+            seq_length=self.seq_length,
+            dropout=self.decoder_dropout,
+            attention_dropout=self.decoder_attention_dropout,
+            )
+
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:
@@ -610,14 +649,22 @@ class ResidualVisionTransformer(nn.Module):
         x = self.encoder(x)
 
         # Get all class tokens and average them
-        x = x[:, 0:self.num_class_tokens]
-        #print(x.shape)
-        x = reduce(x, 'n c e -> n e', reduction='sum')
+        pre_logits = x[:, 0:self.num_class_tokens]
+        pre_logits = reduce(pre_logits, 'n c e -> n e', reduction='sum')
+        logits = self.head(pre_logits)
 
-        # Classification head
-        x = self.head(x)
+        # Get other tokens, we should exclude clas, register and budget tokens
+        print(self.num_budget_tokens)
+        tokens = x[:, self.num_class_tokens + self.num_registers:-self.num_budget_tokens,: ]
 
-        return x
+        # get mask of last residual layer
+        mask = self.encoder.layers[-1].mask # (batch_size, sequence_len, 1)
+
+        # Pass through the decoder
+        reconstructed_images = self.decoder(tokens, mask)
+
+
+        return logits, reconstructed_images
 
 
     def set_budget(self, budget: float):

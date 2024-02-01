@@ -171,7 +171,7 @@ class EEResidualVisionTransformer(nn.Module):
         self.gate_bias = gate_bias
         
         # assume all layers are residual by default
-        self.residual_layers = residual_layers or [None] * num_layers
+        self.residual_layers = residual_layers or ['attention+mlp'] * num_layers
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
 

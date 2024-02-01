@@ -1,4 +1,6 @@
 import math
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from typing import List, Optional
 import torch
 from torch import nn
@@ -6,7 +8,7 @@ from torch import nn
 from einops import rearrange
 from einops.layers.torch import Rearrange
 
-from .vit import ViTBlock
+from peekvit.models.vit import ViTBlock
 
 
 
@@ -306,10 +308,12 @@ class MAEVisionTransformerDecoder(torch.nn.Module):
             # pos_embedding has shape (1, seq_length-1, hidden_dim)
 
             # Replace masked tokens with mask token
-            tokens = tokens.masked_fill(mask.unsqueeze(-1), self.mask_token)
-            
-            
+            mask = mask.unsqueeze(-1).expand(-1, -1, hidden_dim)
+            tokens = tokens * mask + self.mask_token * (1 - mask)
 
+            # Add positional embeddings
+            tokens += self.pos_embedding
+            
         # Pass through the encoder
         tokens = self.encoder(tokens)
 
@@ -387,7 +391,7 @@ class MAEVisionTransformer(torch.nn.Module):
 
 
 
-"""if __name__ == '__main__':
+if __name__ == '__main__':
     model = MAEVisionTransformer(
     image_size=32,
     patch_size=4,
@@ -414,4 +418,4 @@ class MAEVisionTransformer(torch.nn.Module):
 
 
     input = torch.randn(1, 3, 32, 32)
-    logits, img = model(input)"""
+    logits, img = model(input)
