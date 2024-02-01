@@ -1,4 +1,4 @@
-_target_: peekvit.models.vit.VisionTransformer
+_target_: peekvit.models.rankvit.RankVisionTransformer
 num_classes: ${dataset.num_classes}
 image_size: ${dataset.image_size}
 patch_size: 16

@@ -45,7 +45,7 @@ You will find the masking plots for the number of images you requested inside th
 - Train a vit with default params: `python train/train.py`
 - Train a vit with custom params: `python train/train.py model.hidden_dim=318` (you can achieve the same by editing the yaml file)
 - Train a residualvit (with masks) starting from a vit checkpoint: `python train/train.py model=residualvit training=finetuning losses=crossentropy_mse load_from=<path to experiment_directory containing vit>`
-
+- Plot the class tokens and their distances for a pretrained vit_b_16 `python validate/create_cls_token_plots.py test.num_images=10 model=vit_b_16 dataset.image_size=224 model.torch_pretrained_weights=ViT_B_16_Weights['IMAGENET1K_V1']`
 
 
 

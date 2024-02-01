@@ -221,5 +221,5 @@ class VisionTransformer(nn.Module):
 
         return x
 
-    # TODO: add a method 'from_pytorch' that takes a pytorch model and converts it to a peekvit model
+    
     

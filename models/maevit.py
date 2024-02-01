@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from einops import rearrange
+from einops.layers.torch import Rearrange
 
 from .vit import ViTBlock
 
@@ -170,7 +171,8 @@ class MAEVisionTransformerEncoder(nn.Module):
         if self.conv_proj.bias is not None:
             nn.init.zeros_(self.conv_proj.bias)
         
-        self.token_shuffle = TokenShuffle(mask_ratio)
+        if mask_ratio > 0.0:
+            self.token_shuffle = TokenShuffle(mask_ratio)
 
         if torch_pretrained_weights is not None:
             from .adapters import adapt_torch_state_dict
@@ -211,7 +213,10 @@ class MAEVisionTransformerEncoder(nn.Module):
         n = x.shape[0]
 
         # Shuffle tokens
-        x, forward_perm, backward_perm = self.token_shuffle(x)
+        forward_perm = None
+        backward_perm = None
+        if self.mask_ratio > 0.0 and self.training:
+            x, forward_perm, backward_perm = self.token_shuffle(x)
 
 
         # Add registers
@@ -265,33 +270,38 @@ class MAEVisionTransformerDecoder(torch.nn.Module):
             )
 
         self.head = torch.nn.Linear(decoder_hidden_dim, 3 * patch_size ** 2)
-        # self.patch2img = Rearrange('(h w) b (c p1 p2) -> b c (h p1) (w p2)', p1=patch_size, p2=patch_size, h=image_size//patch_size)
+        self.patch2img = Rearrange('b (h w) (c p1 p2) -> b c (h p1) (w p2)', p1=patch_size, p2=patch_size, h=image_size//patch_size)
 
 
-    def forward(self, tokens, backward_indices):
+    def forward(self, tokens, backward_indices=None, mask=None):
 
-        batch, seq_length, hidden_dim = tokens.shape
-        num_missing_tokens = backward_indices.shape[0] - seq_length
+        assert backward_indices or mask, "Either backward_indices or mask must be provided"
 
-        # Add mask tokens
-        batch_mask_tokens = self.mask_token.expand(batch, num_missing_tokens, -1)
-        tokens = torch.cat([tokens, batch_mask_tokens], dim=1)
+        if backward_indices:
+
+            batch, seq_length, hidden_dim = tokens.shape
+            num_missing_tokens = backward_indices.shape[0] - seq_length
+
+            # Add mask tokens
+            batch_mask_tokens = self.mask_token.expand(batch, num_missing_tokens, -1)
+            tokens = torch.cat([tokens, batch_mask_tokens], dim=1)
 
 
+            # Undo the shuffling
+            tokens = tokens[:, backward_indices, :]
 
-        # Undo the shuffling
-        tokens = tokens[:, backward_indices, :]
-
-        # Add positional embeddings
-        tokens += self.pos_embedding
+            # Add positional embeddings
+            tokens += self.pos_embedding
+        else:
+            raise NotImplementedError
 
         # Pass through the encoder
         tokens = self.encoder(tokens)
 
         # We should recover the original image from the tokens
         # (batch_size, seq_length, hidden_dim) -> (batch_size, 3, image_size, image_size)
-        img = self.head(tokens)
-        img = rearrange(img, 'b (h w) (c p1 p2) -> b c (h p1) (w p2)', p1=self.patch_size, p2=self.patch_size, h=self.image_size//self.patch_size)
+        tokens = self.head(tokens)
+        img = self.patch2img(tokens)
 
         return img
 
@@ -338,7 +348,6 @@ class MAEVisionTransformer(torch.nn.Module):
             num_registers,
             num_class_tokens,
             torch_pretrained_weights,
-            
         )
 
         
