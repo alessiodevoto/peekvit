@@ -176,7 +176,7 @@ def test(cfg: DictConfig):
     # if a model is provided in the config file, load it
     model = None
     if 'model' in cfg:
-        print('Instantiating new model from config file. \nIf you want to load a model from a checkpoint, remove the "model" field from the config file.')
+        print('Instantiating new model from config file.')
         model = instantiate(cfg.model)
         model = model.to(device)
 

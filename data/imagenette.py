@@ -52,7 +52,7 @@ class Imagenette:
     self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_imagenette(root, train_transform, test_transform, target_transform)
 
     if 'num_classes' in kwargs:
-       print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset. Ignoring the argument and using default number of classes.')
+       print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset. \nIgnoring the argument and using default number of classes in this dataset (10).')
 
 
   def get_imagenette_transforms(self):

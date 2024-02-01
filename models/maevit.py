@@ -274,15 +274,18 @@ class MAEVisionTransformerDecoder(torch.nn.Module):
 
 
     def forward(self, tokens, backward_indices=None, mask=None):
-
+        
+        batch, seq_length, hidden_dim = tokens.shape
+        
         assert backward_indices or mask, "Either backward_indices or mask must be provided"
 
         if backward_indices:
-
-            batch, seq_length, hidden_dim = tokens.shape
-            num_missing_tokens = backward_indices.shape[0] - seq_length
+            # this means we have received a subset of tokens, as the others have been dropped.
+            # we need to add a class token and positional embeddings
+            # the way we do it is by adding a mask token and then undo the shuffling of the tokens
 
             # Add mask tokens
+            num_missing_tokens = backward_indices.shape[0] - seq_length
             batch_mask_tokens = self.mask_token.expand(batch, num_missing_tokens, -1)
             tokens = torch.cat([tokens, batch_mask_tokens], dim=1)
 
@@ -293,7 +296,19 @@ class MAEVisionTransformerDecoder(torch.nn.Module):
             # Add positional embeddings
             tokens += self.pos_embedding
         else:
-            raise NotImplementedError
+            # this means we have received a mask
+            # the mask represents the tokens that have been dropped
+            # we should replace the dropped tokens with the mask token
+            # and add positional embeddings
+            # mask has shape (batch_size, seq_length)
+            # tokens has shape (batch_size, seq_length, hidden_dim)
+            # mask_token has shape (1, 1, hidden_dim)
+            # pos_embedding has shape (1, seq_length-1, hidden_dim)
+
+            # Replace masked tokens with mask token
+            tokens = tokens.masked_fill(mask.unsqueeze(-1), self.mask_token)
+            
+            
 
         # Pass through the encoder
         tokens = self.encoder(tokens)

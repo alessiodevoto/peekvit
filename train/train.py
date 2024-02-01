@@ -81,9 +81,9 @@ def train(cfg: DictConfig):
 
     # training
     # TODO change this to hydras instantiate
-    # optimizer = instantiate(cfg.optimizer, params=model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
+    optimizer = instantiate(training_args['optimizer'], params=model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
     # optimizer = torch.optim.SGD(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
+    # optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
 
     # training loop

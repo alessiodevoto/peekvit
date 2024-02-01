@@ -69,9 +69,9 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
 
     fig, ax = plt.subplots()
     ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o')
-    ax.set_xlabel('Budget')
+    ax.set_xlabel('Flops')
     ax.set_ylabel('Accuracy')
-    ax.set_title('Budget vs Accuracy')
+    ax.set_title('Flops vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     plt.ylim([0.1, 0.9])
     plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
