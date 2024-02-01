@@ -766,7 +766,8 @@ def plot_reconstructed_images(model, images_to_plot, model_transform, visualizat
     _img = model_transform(img) if model_transform is not None else img
     
     # model.set_budget(budget)
-    out, reconstructed = model(make_batch(_img).to(device)) 
+    out, reconstructed, mask = model(make_batch(_img).to(device)) 
+    
 
 
     # prepare plot, we want a row for each residual layer,
@@ -779,7 +780,7 @@ def plot_reconstructed_images(model, images_to_plot, model_transform, visualizat
     axs[0,0].title.set_text('Original image')
 
     # plot the reconstructed image
-    reconstructed = prepare_for_matplotlib(reconstructed.squeeze())
+    reconstructed = prepare_for_matplotlib(visualization_transform(reconstructed).squeeze())
     axs[1,0].imshow(reconstructed)
     axs[1,0].title.set_text('Reconstructed image')
 

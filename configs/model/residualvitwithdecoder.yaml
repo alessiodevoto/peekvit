@@ -13,5 +13,5 @@ gate_temp: 1
 add_input: False
 gate_type: 'sigmoid'
 gate_threshold: 0.5
-gate_bias: 1
+gate_bias: -1
 add_budget_token: 'learnable' 

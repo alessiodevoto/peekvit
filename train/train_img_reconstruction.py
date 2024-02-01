@@ -79,12 +79,9 @@ def train(cfg: DictConfig):
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
-    # training
-    # TODO change this to hydras instantiate
+    # optimizer
     optimizer = instantiate(training_args['optimizer'], params=model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    # optimizer = torch.optim.SGD(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    # optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'])
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
@@ -95,10 +92,10 @@ def train(cfg: DictConfig):
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
-            out, reconstructed_input = model(batch)
+            out, reconstructed_input, mask = model(batch)
             
             main_loss = main_criterion(out, labels) 
-            reconstruction_loss = torch.nn.functional.mse_loss(reconstructed_input, batch)
+            reconstruction_loss = torch.mean(((batch-reconstructed_input)**2)) # only compute loss on pixels that are masked
             add_loss_dict, add_loss_val = {}, 0.0
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(
@@ -123,7 +120,7 @@ def train(cfg: DictConfig):
         batches_loss = 0
         for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch} {budget}'):
             batch, labels = batch.to(device), labels.to(device)
-            out, _ = model(batch)
+            out, _, _ = model(batch)
             val_loss = main_criterion(out, labels) 
             predicted = torch.argmax(out, 1)
             metric(predicted, labels)
@@ -178,11 +175,10 @@ def train(cfg: DictConfig):
                 img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
     
 
-    def plot_reconstructed_images(model, budgets):
+    def plot_reconstructed_images_in_training(model, budgets):
         
         subset_idcs = torch.arange(0, len(val_dataset), len(val_dataset)//training_args['num_images_to_plot'])
         images_to_plot = Subset(val_dataset, subset_idcs)
-        hard_prefix = 'hard_'
         from peekvit.utils.visualize import plot_reconstructed_images
         for budget in budgets:
 
@@ -198,7 +194,7 @@ def train(cfg: DictConfig):
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/reconstructed_budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
-                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/reconstructed_budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
+                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/reconstructed_budget_{budget}/reconstructed_img_{subset_idcs[i]}.png')
         
     
     # Training
@@ -219,7 +215,7 @@ def train(cfg: DictConfig):
                 print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
         
         if training_args['plot_reconstructed_images_every'] != -1 and epoch % training_args['plot_reconstructed_images_every'] == 0:
-            plot_reconstructed_images(model, cfg.training.val_budgets)
+            plot_reconstructed_images_in_training(model, cfg.training.val_budgets)
             
             
 

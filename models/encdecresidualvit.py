@@ -336,7 +336,7 @@ class ResidualVisionTransformerWithDecoder(nn.Module):
         reconstructed_images = self.decoder(tokens, mask)
 
 
-        return logits, reconstructed_images
+        return logits, reconstructed_images, mask
 
 
     def set_budget(self, budget: float):

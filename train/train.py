@@ -79,12 +79,9 @@ def train(cfg: DictConfig):
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
-    # training
-    # TODO change this to hydras instantiate
+    # optimizer 
     optimizer = instantiate(training_args['optimizer'], params=model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    # optimizer = torch.optim.SGD(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    # optimizer = torch.optim.Adam(model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'], eta_min=0.0001)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'])
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
