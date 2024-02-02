@@ -88,8 +88,8 @@ class VisionTransformerDecoder(torch.nn.Module):
             )
 
         self.head = torch.nn.Linear(hidden_dim, 3 * patch_size ** 2)
+        
         self.patch2img = Rearrange('b (h w) (c p1 p2) -> b c (h p1) (w p2)', p1=patch_size, p2=patch_size, h=image_size//patch_size)
-
 
     def forward(self, tokens, mask):
         
@@ -113,6 +113,13 @@ class VisionTransformerDecoder(torch.nn.Module):
         tokens = self.head(tokens)
         img = self.patch2img(tokens)
 
-        return img
+        # we should also return the mask, so we can visualize it
+        # mask is shape (batch_size, seq_length, 1), we need to expand it to (batch_size, 1, image_size, image_size)
+        mask = mask[:,:, :self.patch_size**2]
+        print(mask.shape)
+        mask = self.patch2img(mask)
+
+
+        return img, mask
 
 

@@ -3,6 +3,7 @@ from .residualvit import ResidualVisionTransformer
 from .vit import VisionTransformer
 from .eeresidualvit import EEResidualVisionTransformer
 from .adapters import adapt_torch_state_dict
+from .encdecresidualvit import ResidualVisionTransformerWithDecoder
 
 
 ###########################################################################################################################
@@ -23,6 +24,8 @@ MODELS_MAP = {
     'EEResidualVisionTransformer': EEResidualVisionTransformer,
     'eeResidualVisionTransformer': EEResidualVisionTransformer,
     'eeResidualvit': EEResidualVisionTransformer,
+
+    'ResidualVisionTransformerWithDecoder': ResidualVisionTransformerWithDecoder,
 
 }
 

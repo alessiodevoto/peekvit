@@ -97,7 +97,7 @@ def train(cfg: DictConfig):
             out, reconstructed_input, mask = model(batch)
             
             main_loss = main_criterion(out, labels) 
-            reconstruction_loss = torch.mean(((batch-reconstructed_input)**2)) # only compute loss on pixels that are masked
+            reconstruction_loss = torch.mean(((batch-reconstructed_input)**2)*mask) # TODO only compute loss on pixels that are masked
             add_loss_dict, add_loss_val = {}, 0.0
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(

@@ -780,7 +780,7 @@ def plot_reconstructed_images(model, images_to_plot, model_transform, visualizat
     axs[0,0].title.set_text('Original image')
 
     # plot the reconstructed image
-    reconstructed = prepare_for_matplotlib(visualization_transform(reconstructed).squeeze())
+    reconstructed = prepare_for_matplotlib(visualization_transform(reconstructed * (1-mask)).squeeze())
     axs[1,0].imshow(reconstructed)
     axs[1,0].title.set_text('Reconstructed image')
 

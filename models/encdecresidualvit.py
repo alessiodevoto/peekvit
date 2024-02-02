@@ -333,10 +333,10 @@ class ResidualVisionTransformerWithDecoder(nn.Module):
         mask = self.encoder.layers[-1].mask # (batch_size, sequence_len, 1)
 
         # Pass through the decoder
-        reconstructed_images = self.decoder(tokens, mask)
+        reconstructed_images, reconstructed_images_mask = self.decoder(tokens, mask)
 
 
-        return logits, reconstructed_images, mask
+        return logits, reconstructed_images, reconstructed_images_mask
 
 
     def set_budget(self, budget: float):
