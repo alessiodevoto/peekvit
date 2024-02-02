@@ -30,7 +30,9 @@ defaults:
   - dataset: imagenette
   - model: vit
   - training: base
-  - loss: crossentropy_mse
+  - optimizer: adam
+  - scheduler: null
+  - loss: crossentropy
   - noise: no_noise 
   - _self_
 

@@ -79,9 +79,11 @@ def train(cfg: DictConfig):
     # metrics
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
 
-    # optimizer
-    optimizer = instantiate(training_args['optimizer'], params=model.parameters(), lr=training_args['lr'], weight_decay=training_args['weight_decay'])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=training_args['num_epochs'])
+    # optimizer and scheduler
+    optimizer = instantiate(cfg.optimizer, params=model.parameters())
+    scheduler = None
+    if 'scheduler' in cfg:
+        scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):

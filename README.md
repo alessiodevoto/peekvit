@@ -60,7 +60,12 @@ In all the following scripts we pass the settings via CLI instead of editing the
 
 
 #### TODOS
-- detailed comments for losses
+- Detailed comments for losses
 - Examples on comparative plots
+- Move optimizers to specific config file 
+- Fix autoenc loss for masking 
+- Class token plot example
 - Add a script for each howto
 - default cumulative noise plot when testing noise
+- fix enc dec as now computes loss for all tokens
+- config file for each model

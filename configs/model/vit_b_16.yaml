@@ -6,4 +6,4 @@ hidden_dim: 768
 mlp_dim: 3072
 num_layers: 12
 num_heads: 12
-torch_pretrained_weights: ViT_B_16_Weights['IMAGENET1K_V1']
+torch_pretrained_weights: null #ViT_B_16_Weights['IMAGENET1K_V1']

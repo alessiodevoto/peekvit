@@ -1,9 +1,5 @@
 train_batch_size: 128
 eval_batch_size: 128
-optimizer: 
-  _target_: torch.optim.Adam
-lr: 1e-3
-weight_decay: 1e-2
 clip_grad_norm: 1.0
 num_epochs: 300
 eval_every: 10                    # -1 for no evaluation
