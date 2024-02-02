@@ -101,7 +101,7 @@ def train(cfg: DictConfig):
                 add_loss_dict, add_loss_val = additional_losses.compute(
                     model, 
                     budget=model.current_budget,
-                    channel_budget=model.current_channel_budget, 
+                    channel_budget=getattr(model, 'current_channel_budget', None),
                     dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()

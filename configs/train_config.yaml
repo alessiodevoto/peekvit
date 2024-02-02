@@ -28,11 +28,11 @@ hydra:
 defaults:
   - logger: wandb
   - dataset: imagenette
-  - model: vit_small
+  - model: vit_tiny
   - training: base
   - optimizer: adam
   - scheduler: null
-  - loss: crossentropy
+  - loss: crossentropy_mse
   - noise: no_noise 
   - _self_
 
