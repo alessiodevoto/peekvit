@@ -10,3 +10,4 @@ additional_losses:
         weight: 0.2
         strict: True
         budget: null
+        skip_layers: [0,1,3]
