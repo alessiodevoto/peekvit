@@ -62,7 +62,6 @@ In all the following scripts we pass the settings via CLI instead of editing the
 #### TODOS
 - Detailed comments for losses
 - Examples on comparative plots
-- Move optimizers to specific config file 
 - Fix autoenc loss for masking 
 - Class token plot example
 - Add a script for each howto

@@ -28,7 +28,7 @@ hydra:
 defaults:
   - logger: wandb
   - dataset: imagenette
-  - model: vit
+  - model: vit_small
   - training: base
   - optimizer: adam
   - scheduler: null
