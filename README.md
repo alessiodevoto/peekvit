@@ -4,7 +4,9 @@ This repo uses [hydra](https://hydra.cc/) for managing experiment in a modular w
 
 > Before testing, don't forget to `pip install -r requirements.txt`.
 
-All settings (workspace path, dataset, model etc...) are defined in the `config` directory. With Hydra, you can edit the settings by either passing them as command line args or by editing the config files.
+All settings (workspace path, dataset, model etc...) are defined in the `config` directory. With Hydra, you can edit the settings by either passing them as command line args or by editing the config files. 
+
+Here is a list of 'HowTos' for hydra experimetns. Last one is a simple example without Hydra.
 
 ### How To: run a quick experiment with default parameters
 - Edit the path to your workspace and wandb credentials in `train_config.yaml`. 
@@ -42,6 +44,10 @@ Plots for each run will be stored to the run experiment directory where the chec
 
 You will find the masking plots for the number of images you requested inside the experiment directory. 
 ![](images/example_plot.jpg)
+
+
+### How To: Load a model in a Jupyter Notebook
+- See `peekvit/notebooks/quickstart.ipynb`
 
 
 
