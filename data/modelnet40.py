@@ -64,7 +64,7 @@ class ModelNet40Ply2048(Dataset):
 
 ############################################################### MODELNET40 DATASET ###############################################################
 
-class ModelNet40Ply2048:
+class ModelNet40:
     """
     A class representing the ModelNet40 dataset.
 
@@ -87,8 +87,10 @@ class ModelNet40Ply2048:
 
     MODELNET40_CLASSES = ['airplane', 'bathtub', 'bed', 'bench', 'bookshelf', 'bottle', 'bowl', 'car', 'chair', 'cone', 'cup', 'curtain', 'desk', 'door', 'dresser', 'flower_pot', 'glass_box', 'guitar', 'keyboard', 'lamp', 'laptop', 'mantel', 'monitor', 'night_stand', 'person', 'piano', 'plant', 'radio', 'range_hood', 'sink', 'sofa', 'stairs', 'stool', 'table', 'tent', 'toilet', 'tv_stand', 'vase', 'wardrobe', 'xbox']
 
-    def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
+    def __init__(self, root, num_points = 1024, num_classes = 40, train_transform=None, test_transform=None, target_transform=None, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
         self.root = root
+        self.num_points = num_points
+        self.num_classes = num_classes
         self.train_transform = train_transform
         self.test_transform = test_transform
         self.target_transform = target_transform
@@ -139,7 +141,7 @@ class ModelNet40Ply2048:
         downloaded_file = pathlib.Path(root) / "modelnet40.zip"
         if not os.path.exists(downloaded_file):
             print(f'Downloading ModelNet40 dataset to {downloaded_file}')
-            downloaded_file.write_bytes(requests.get(self.IMAGENETTE_URL).content)
+            downloaded_file.write_bytes(requests.get(self.MODELNET40_URL, verify=False).content)
         else:
             print(f'Archive found at {downloaded_file}, skipping download')
 
@@ -153,10 +155,10 @@ class ModelNet40Ply2048:
             print(f'Archive already extracted to {extracted_file}, skipping extraction')
         
         #create ModelNet40 dataset
-        
-        train_path, val_path = [pathlib.Path(root) / folder for folder in ['modelnet40/train', 'modelnet40/test']]
-        train_dataset = ModelNet40Ply2048(train_path, train_transform, target_transform)
-        val_dataset = ModelNet40Ply2048(val_path, test_transform, target_transform)
+        ds_path = pathlib.Path(root) / "modelnet40_ply_hdf5_2048"
+        #train_path, val_path = [pathlib.Path(root) / folder for folder in ['modelnet40/train', 'modelnet40/test']]
+        train_dataset = ModelNet40Ply2048(ds_path, split="train")
+        val_dataset = ModelNet40Ply2048(ds_path, split="test")
 
         return train_dataset, val_dataset, train_transform, test_transform
 

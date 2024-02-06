@@ -87,7 +87,7 @@ class ARPE(nn.Module):
         x = self.max_pooling_layer(x).squeeze(2) # B*N, 1, 2*C -> B*N, 2*C
         x = F.elu(self.bn2(self.lin2(x.view(B, N, 2*C)).transpose(1,2)).transpose(1,2)) # B, N, out_channels
 
-        return x # B, N, 2*C
+        return x # B, N, out_channels
 
 # PCT Encoder
 class PCTEncoder(nn.Module):
@@ -124,10 +124,11 @@ class PCTEncoder(nn.Module):
             input = layer(input)
         return input
     
-class PointCloudTransformer(nn.module):
+class PointCloudTransformer(nn.Module):
 
     def __init__(
             self,
+            num_points: int,
             num_layers: int,
             num_heads: int,
             hidden_dim: int,
@@ -151,3 +152,65 @@ class PointCloudTransformer(nn.module):
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
 
+        # Embedder
+        self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
+        
+        # Add class tokens
+        self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
+
+        # Add registers
+        if num_registers > 0:
+            self.registers = nn.Parameter(torch.zeros(1, num_registers, hidden_dim))
+        
+        # PCT Encoder
+        self.encoder = PCTEncoder(
+            num_layers=num_layers,
+            num_heads=num_heads,
+            hidden_dim=hidden_dim,
+            mlp_dim=mlp_dim,
+            dropout=dropout,
+            attention_dropout=attention_dropout,
+        )
+
+        # Classification Head
+        self.head = nn.Linear(hidden_dim, num_classes)
+        nn.init.zeros_(self.head.bias)
+        nn.init.zeros_(self.head.weight)
+
+        if torch_pretrained_weights is not None:
+            from .adapters import adapt_torch_state_dict
+            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict()
+            adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
+
+    def _process_input(self, x: torch.Tensor) -> torch.Tensor:
+        torch._assert(x.dim() == 3, f"Expected (batch_size, num_points, channels) got {x.shape}")
+        
+        x = self.embedder(x)
+        
+        return x # B, N, hidden_dim
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        # Embedding
+        x = self._process_input(x)
+        b = x.shape[0]
+
+        # Add registers
+        if self.num_registers > 0:
+            x = torch.cat([self.registers.expand(b, -1, -1), x], dim=1)
+
+        # Add class tokens
+        x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
+
+        # Pass through PCT Encoder
+        x = self.encoder(x)
+
+        # Sum class tokens (?)
+        x = x[:, 0:self.num_class_tokens]
+        x = torch.sum(x, dim=1)
+
+        # Classification Head
+        x = self.head(x)
+
+        return x
