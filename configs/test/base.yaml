@@ -7,3 +7,4 @@ hard_mask: True
 
 cumulative_plot: True
 cumulative_plot_dir: ${experiments_dir}/${experiment_name}
+run_names: null

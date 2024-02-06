@@ -245,7 +245,9 @@ def test(cfg: DictConfig):
             plot_cumulative_budget_recap(
                 run_accs_per_budget=all_results_per_budget, 
                 run_accs_per_flops=all_results_per_flops,
-                save_dir=cumulative_plot_dir)
+                save_dir=cumulative_plot_dir,
+                run_names=cfg.test.run_names
+                )
      
 
     

@@ -21,6 +21,14 @@ import wandb
 
 from .utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
+def string_to_color(s):
+    """
+    Convert a string to a unique color using its hash value.
+    """
+    hash_value = hash(str(s))
+    color = plt.cm.tab10(hash_value % 10)   # Use viridis colormap, but you can choose any colormap
+    return color
+
 ######################################################## Utils ##################################################################
 
 def prepare_for_matplotlib(t):
@@ -77,11 +85,11 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
 
 
-def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label=""):
+def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label="", run_names=None):
     
     fig, ax = plt.subplots()
     for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
-      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=cm.viridis(i/0.6))
+      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=string_to_color(i))
       ax.set_xlabel('Budget')
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
@@ -93,14 +101,14 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
     
     fig, ax = plt.subplots()
     for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
-      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=cm.viridis(i/0.6))
-      ax.set_xlabel('Budget')
+      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=string_to_color(i))
+      ax.set_xlabel('Flops')
       ax.set_ylabel('Accuracy')
-      ax.set_title('Budget vs Accuracy')
+      ax.set_title('Flops vs Accuracy')
       plt.ylim([0.1, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
-    plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
+    plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
     plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
 
 
@@ -151,7 +159,7 @@ def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additio
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=string_to_color(str(noise)))
             ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
@@ -346,7 +354,7 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=string_to_color(str(noise)))
             ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
