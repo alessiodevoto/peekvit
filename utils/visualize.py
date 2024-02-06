@@ -96,7 +96,7 @@ def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_d
       plt.ylim([0.1, 0.9])
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
-    plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
+    plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
     plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
     
     fig, ax = plt.subplots()

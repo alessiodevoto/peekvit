@@ -8,6 +8,6 @@ additional_losses:
     mse:
         _target_:  peekvit.utils.losses.MSELoss
         weight: 1
-        strict: True
+        strict: False
         budget: null
         skip_layers: []
