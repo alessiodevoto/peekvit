@@ -48,13 +48,14 @@ class PCTBlock(nn.Module):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
         x = self.ln_1(input)
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
+        x = self.self_attention(x) + x
+        x = self.mlp(self.ln_2(x)) + x
+        #x = self.dropout(x)
+        #x = x + input
 
-        y = self.ln_2(x)
-        y = self.mlp(y)
-        return x + y
+        #y = self.ln_2(x)
+        #y = self.mlp(y)
+        return x
     
 #ARPE: Absolute Relative Position Encoding
 class ARPE(nn.Module):
@@ -123,7 +124,26 @@ class PCTEncoder(nn.Module):
         for layer in self.layers:
             input = layer(input)
         return input
-    
+
+# Classification Head    
+class Classf_head(nn.Module):
+    def __init__(self, in_channels, n_classes) -> None:
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.n_classes = n_classes
+        self.lin1 = nn.Linear(in_channels, in_channels//2)
+        self.lin2 = nn.Linear(in_channels//2, n_classes)
+        self.bn1 = nn.BatchNorm1d(in_channels//2)
+        self.dp = nn.Dropout(0.5)
+
+    def forward(self, x):
+        
+        x = F.gelu(self.bn1(self.lin1(x)))
+        x = self.lin2(self.dp(x))
+        return x
+
+
 class PointCloudTransformer(nn.Module):
 
     def __init__(
@@ -173,9 +193,7 @@ class PointCloudTransformer(nn.Module):
         )
 
         # Classification Head
-        self.head = nn.Linear(hidden_dim, num_classes)
-        nn.init.zeros_(self.head.bias)
-        nn.init.zeros_(self.head.weight)
+        self.head = Classf_head(hidden_dim, num_classes)
 
         if torch_pretrained_weights is not None:
             from .adapters import adapt_torch_state_dict
@@ -201,14 +219,17 @@ class PointCloudTransformer(nn.Module):
             x = torch.cat([self.registers.expand(b, -1, -1), x], dim=1)
 
         # Add class tokens
-        x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
+        #x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
 
         # Pass through PCT Encoder
         x = self.encoder(x)
 
         # Sum class tokens (?)
-        x = x[:, 0:self.num_class_tokens]
-        x = torch.sum(x, dim=1)
+        #x = x[:, 0:self.num_class_tokens]
+        #x = torch.sum(x, dim=1)
+
+        #TEST, Average pooling
+        x = torch.mean(x, dim=1)
 
         # Classification Head
         x = self.head(x)

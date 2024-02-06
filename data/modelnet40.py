@@ -87,7 +87,7 @@ class ModelNet40:
 
     MODELNET40_CLASSES = ['airplane', 'bathtub', 'bed', 'bench', 'bookshelf', 'bottle', 'bowl', 'car', 'chair', 'cone', 'cup', 'curtain', 'desk', 'door', 'dresser', 'flower_pot', 'glass_box', 'guitar', 'keyboard', 'lamp', 'laptop', 'mantel', 'monitor', 'night_stand', 'person', 'piano', 'plant', 'radio', 'range_hood', 'sink', 'sofa', 'stairs', 'stool', 'table', 'tent', 'toilet', 'tv_stand', 'vase', 'wardrobe', 'xbox']
 
-    def __init__(self, root, num_points = 1024, num_classes = 40, train_transform=None, test_transform=None, target_transform=None, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
+    def __init__(self, root, num_points = 2048, num_classes = 40, train_transform=None, test_transform=None, target_transform=None, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
         self.root = root
         self.num_points = num_points
         self.num_classes = num_classes
@@ -146,7 +146,7 @@ class ModelNet40:
             print(f'Archive found at {downloaded_file}, skipping download')
 
         # unzip the downloaded file
-        extracted_file = pathlib.Path(root) / "modelnet40"
+        extracted_file = pathlib.Path(root) / "modelnet40_ply_hdf5_2048"
         if not os.path.exists(extracted_file):
             print(f'Extracting ModelNet40 dataset to {extracted_file}')
             with zipfile.ZipFile(downloaded_file, 'r') as zip_ref:
