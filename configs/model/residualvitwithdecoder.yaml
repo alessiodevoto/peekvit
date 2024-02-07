@@ -1,0 +1,17 @@
+_target_: peekvit.models.encdecresidualvit.ResidualVisionTransformerWithDecoder
+num_classes: ${dataset.num_classes}
+image_size: ${dataset.image_size}
+patch_size: 8
+hidden_dim: 256
+mlp_dim: 768
+num_layers: 4
+num_heads: 4
+attention_dropout: 0.1
+dropout: 0.1
+residual_layers: ['attention+mlp', 'attention+mlp', 'attention+mlp', 'attention+mlp'] 
+gate_temp: 1
+add_input: False
+gate_type: 'sigmoid'
+gate_threshold: 0.5
+gate_bias: -1
+add_budget_token: 'learnable' 

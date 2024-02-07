@@ -1,0 +1,18 @@
+classification_loss:
+    _target_: torch.nn.CrossEntropyLoss
+
+# additional losses are optional and are used to regularize the model
+# they can be used for moes or residual models
+# for more info see peekvit/losses.py
+additional_losses:
+    mse:
+        _target_:  peekvit.utils.losses.MSELoss
+        weight: 0.2
+        strict: True
+        budget: null    # budget will be sampled at runtime if null
+    channel:
+        _target_:  peekvit.utils.losses.ChannelMSELoss
+        weight: 0.2
+        strict: False
+        skip_layers: [0,1,3] # 4 layers model, channel is in the middle
+        budget: null    # budget will be sampled at runtime if null

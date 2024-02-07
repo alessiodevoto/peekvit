@@ -1,0 +1,4 @@
+classification_loss:
+    _target_: torch.nn.CrossEntropyLoss
+
+additional_losses: null

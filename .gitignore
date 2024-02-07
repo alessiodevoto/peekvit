@@ -9,6 +9,4 @@ notes.txt
 tests_test_tiny_imagenet.py
 tests**
 **nohup.out
-configs/train_config.yaml
-configs/test_config.yaml
-config/logger/**
+
