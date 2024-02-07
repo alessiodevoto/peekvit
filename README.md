@@ -74,3 +74,4 @@ In all the following scripts we pass the settings via CLI instead of editing the
 - default cumulative noise plot when testing noise
 - fix enc dec as now computes loss for all tokens
 - config file for each model
+- change cuda float
