@@ -5,6 +5,7 @@ from .eeresidualvit import EEResidualVisionTransformer
 from .adapters import adapt_torch_state_dict
 from .encdecresidualvit import ResidualVisionTransformerWithDecoder
 from .rankvit import RankVisionTransformer
+from .pct import PointCloudTransformer
 
 
 ###########################################################################################################################
@@ -29,8 +30,10 @@ MODELS_MAP = {
     'ResidualVisionTransformerWithDecoder': ResidualVisionTransformerWithDecoder,
 
     'RankingVisionTransformer': RankVisionTransformer,
-    'RankVisionTransformer': RankVisionTransformer
+    'RankVisionTransformer': RankVisionTransformer,
 
+    'PointCloudTransformer': PointCloudTransformer,
+    
 }
 
 
