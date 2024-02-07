@@ -3,9 +3,11 @@ from torch import nn
 import torch.nn.functional as F
 from collections import OrderedDict
 import math
-from typing import Optional, List
+from typing import Optional, List, Union
 from abc import ABC
 import math
+from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
+
 
 from .blocks import SelfAttention, MLP
 from einops import reduce
@@ -197,6 +199,7 @@ class RankVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         num_class_tokens: int = 1,
+        torch_pretrained_weights: Optional[str] = None,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -249,6 +252,13 @@ class RankVisionTransformer(nn.Module):
         nn.init.trunc_normal_(self.conv_proj.weight, std=math.sqrt(1 / fan_in))
         if self.conv_proj.bias is not None:
             nn.init.zeros_(self.conv_proj.bias)
+        
+
+        if torch_pretrained_weights is not None:
+            from .adapters import adapt_torch_state_dict
+            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict()
+            adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
+            self.load_state_dict(adapted_state_dict, strict=True)
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:
@@ -299,14 +309,22 @@ class RankVisionTransformer(nn.Module):
         return x
     
 
-    def enable_ranking(self, sort_tokens: bool):
-            """
-            Enable the ranking of tokens in each layer of the encoder.
-            Args:
-                sort_tokens (bool): Flag indicating whether to sort tokens.
-            """
-            for rankvitblock in self.encoder.layers:
-                rankvitblock.sort = sort_tokens
+    def enable_ranking(self, sort_tokens: Union[bool, List[bool]] = False):
+        """
+        Enable ranking for the RankVit model.
+
+        Args:
+            sort_tokens (Union[bool, List[bool]], optional): 
+                A boolean value or a list of boolean values indicating whether to sort tokens for each RankVit block. 
+                If a single boolean value is provided, it will be applied to all RankVit blocks. 
+                If a list of boolean values is provided, each value will be applied to the corresponding RankVit block. 
+                Defaults to False.
+        """
+        if isinstance(sort_tokens, bool):
+            sort_tokens = [sort_tokens] * len(self.encoder.layers)
+
+        for rankvitblock, sort in zip(self.encoder.layers, sort_tokens):
+            rankvitblock.sort = sort
     
 
     def set_budget(self, budget: float):

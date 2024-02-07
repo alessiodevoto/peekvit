@@ -39,7 +39,9 @@ def create_class_token_plots(
         ):
     
     # if model parameters are not specified in the config file, load the model from the checkpoint
-    model, _, epoch, _, _ = load_state(model_checkpoint_path, model=model, strict=True)
+    if model_checkpoint_path is not None:
+        model, _, epoch, _, _ = load_state(model_checkpoint_path, model=model, strict=True)
+    
     model.eval()
     model.to(device)
     

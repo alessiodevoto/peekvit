@@ -30,7 +30,9 @@ defaults:
   - dataset: modelnet40
   - model: pct
   - training: base
-  - loss: crossentropy
+  - optimizer: adam
+  - scheduler: null
+  - loss: crossentropy_mse
   - noise: no_noise 
   - _self_
 

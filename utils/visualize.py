@@ -21,6 +21,14 @@ import wandb
 
 from .utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
+def string_to_color(s):
+    """
+    Convert a string to a unique color using its hash value.
+    """
+    hash_value = hash(str(s))
+    color = plt.cm.tab10(hash_value % 10)   # Use viridis colormap, but you can choose any colormap
+    return color
+
 ######################################################## Utils ##################################################################
 
 def prepare_for_matplotlib(t):
@@ -69,72 +77,93 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
 
     fig, ax = plt.subplots()
     ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o')
-    ax.set_xlabel('Budget')
+    ax.set_xlabel('Flops')
     ax.set_ylabel('Accuracy')
-    ax.set_title('Budget vs Accuracy')
+    ax.set_title('Flops vs Accuracy')
     plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     plt.ylim([0.1, 0.9])
     plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
 
 
-def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label=""):
+def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label="", run_names=None):
+    if run_accs_per_budget is not None:
+      fig, ax = plt.subplots()
+      for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
+        ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=string_to_color(i))
+        ax.set_xlabel('Budget')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Budget vs Accuracy')
+        plt.ylim([0.1, 0.9])
+        plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
-    fig, ax = plt.subplots()
-    for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
-      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=cm.viridis(i/0.6))
-      ax.set_xlabel('Budget')
-      ax.set_ylabel('Accuracy')
-      ax.set_title('Budget vs Accuracy')
-      plt.ylim([0.1, 0.9])
-      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
+      plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
     
-    plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
-    plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
-    
-    fig, ax = plt.subplots()
-    for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
-      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=cm.viridis(i/0.6))
-      ax.set_xlabel('Budget')
-      ax.set_ylabel('Accuracy')
-      ax.set_title('Budget vs Accuracy')
-      plt.ylim([0.1, 0.9])
-      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    
-    plt.legend([x.split('/')[-1] for x in run_accs_per_flops.keys()])
-    plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
+    if run_accs_per_flops is not None:
+      fig, ax = plt.subplots()
+      for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
+        ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=string_to_color(i))
+        ax.set_xlabel('Flops')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Flops vs Accuracy')
+        plt.ylim([0.1, 0.9])
+        plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      
+      plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
+      plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
 
 
 def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, additional_label=""):
-    fig, ax = plt.subplots()
-    for budget, results in accs_per_budget.items():
-        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-        ax.set_xlabel('Noise')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Noise vs Accuracy across budgets')
-        ax.legend()
+    if accs_per_budget is not None:
+      fig, ax = plt.subplots()
+      for budget, results in accs_per_budget.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+          ax.set_xlabel('Noise')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Noise vs Accuracy across budgets')
+          ax.legend()
 
-    plt.ylim([0.1, 0.9])
-    plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+      plt.ylim([0.1, 0.9])
+      plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+
+    if accs_per_flops is not None:
+      fig, ax = plt.subplots()
+      for budget, results in accs_per_flops.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+          ax.set_xlabel('Noise')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Noise vs Accuracy across flops')
+          ax.legend()
+      # plt.ylim([0.4, 0.9])
+      plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
+
+def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels="", run_names=None):
+
+    results_per_noise = {}
+    for exp_dir, flops_data in run_accs_per_flops.items():
+        for flop, noise_data in flops_data.items():
+            for noise, acc in noise_data.items():
+                if noise not in results_per_noise:
+                    results_per_noise[noise] = {}
+                if exp_dir not in results_per_noise[noise]:
+                    results_per_noise[noise][exp_dir] = {}
+                results_per_noise[noise][exp_dir][flop] = acc
+
+    print(results_per_noise)
+
+    for noise, exps in results_per_noise.items():
+        plot_cumulative_budget_recap(run_accs_per_budget=None, run_accs_per_flops=exps, save_dir=save_dir, additional_label=f'_noise_{noise}', run_names=run_names) 
+       
 
 
-    """fig, ax = plt.subplots()
-    for budget, results in accs_per_flops.items():
-        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-        ax.set_xlabel('Noise')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Noise vs Accuracy across budgets')
-        ax.legend()
-    # plt.ylim([0.4, 0.9])
-    plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))"""
-
-
-def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels=""):
+def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, additional_x_labels=""):
     # results per budget is a dict of dicts, where the first key is the budget and 
     # the second key is the noise value, and the value is the accuracy.
     # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
     # and we have a line for each noise
 
     # create new dictionary with noise as first key and budget as second key
+
 
     _results_per_noise = {}
     for run in run_accs_per_flops:
@@ -151,7 +180,7 @@ def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additio
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=string_to_color(str(noise)))
             ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
@@ -346,7 +375,7 @@ def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = N
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color = cm.viridis(noise/0.6))
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=string_to_color(str(noise)))
             ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
@@ -542,6 +571,7 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
   plt.close()
   
   return figs
+
   
 
 @torch.no_grad()
@@ -707,6 +737,11 @@ def plot_class_tokens(model, input, save_dir=None, savepath=None):
     plt.xlabel('transformer layer')
     plt.ylabel('dimension')
 
+    # add vertical lines to separate transformer layers
+    for i in range(1, len(cls_tokens)):
+      plt.axvline(x=i - 0.5, color='white', linewidth=2)
+    
+
     if save_dir is not None:
       os.makedirs(save_dir, exist_ok=True)
       plt.savefig(join(save_dir, f'class_tokens.jpg'), dpi=200)
@@ -748,6 +783,46 @@ def plot_class_tokens_distances(model, input, save_dir=None, savepath=None):
     
     
 
+def plot_reconstructed_images(model, images_to_plot, model_transform, visualization_transform):
+  model.eval()
+  device = get_model_device(model)
+  figs = {}
+  
+  i = 0
+  for img, label in tqdm(images_to_plot, desc='Preparing reconstructed images plots'):
+    
+    # forward pass
+    _img = model_transform(img) if model_transform is not None else img
+    
+    # model.set_budget(budget)
+    out, reconstructed, mask = model(make_batch(_img).to(device)) 
+    
+
+
+    # prepare plot, we want a row for each residual layer,
+    # and two columns, one for the image and one for token masks
+    fig, axs = plt.subplots(2, 1, squeeze=False, figsize=(10, 25))
+
+    # plot the image
+    img = prepare_for_matplotlib(visualization_transform(img) if visualization_transform is not None else img)
+    axs[0,0].imshow(img)
+    axs[0,0].title.set_text('Original image')
+
+    # plot the reconstructed image
+    reconstructed = prepare_for_matplotlib(visualization_transform(reconstructed * (1-mask)).squeeze())
+    axs[1,0].imshow(reconstructed)
+    axs[1,0].title.set_text('Reconstructed image')
+
+    fig.tight_layout()
+
+    figs[f'reconstructed_{i}'] = fig
+    i+=1
+
+  
+  return figs
+  
+  
+ 
 
   
   

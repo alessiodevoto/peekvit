@@ -106,12 +106,12 @@ def solo_mse(model, budget: float = 0.65, strict: bool = False, skip_layers: Lis
     # iterate over masks
     sparsity_loss = []
     for layer, (_, mask) in enumerate(masks.items()):
-        if layer in skip_layers: continue
-        sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
-        # if budget > 0.9 : strict = True # TODO quick test
-        sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
-        sparsity_loss.append(sparsity)
-        # sparsity_loss.append(sparsity + (1-budget) / 1e1) # TODO added this correction term here 
+        if layer not in skip_layers: 
+            sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
+            # if budget > 0.9 : strict = True # TODO quick test
+            sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
+            sparsity_loss.append(sparsity)
+            # sparsity_loss.append(sparsity + (1-budget) / 1e1) # TODO added this correction term here 
     
     sparsity_loss = torch.stack(sparsity_loss)
 

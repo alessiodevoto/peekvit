@@ -54,7 +54,7 @@ class TinyImageNet:
     self.train_dataset, self.val_dataset, self.train_transform, self.test_transform = self.get_tiny_imagenet(root, train_transform, test_transform, target_transform)
     
     if 'num_classes' in kwargs:
-      print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset')
+       print(f'Warning: num_classes is not used for {self.__class__.__name__} dataset. \nIgnoring the argument and using default number of classes in this dataset (200).')
 
   @staticmethod
   def normalize_tin_val_folder_structure(path,

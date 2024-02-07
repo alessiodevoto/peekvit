@@ -8,7 +8,7 @@ eval_every: 10                    # -1 for no evaluation
 checkpoint_every: 10              # -1 for no checkpointing
 plot_masks_every: -1              # -1 for no plotting
 num_images_to_plot: 10  
-reinit_class_tokens: False         # reinitialize class tokens before training
-train_backbone: True             # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
+reinit_class_tokens: False        # reinitialize class tokens before training
+train_backbone: True              # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
 num_workers: 28
-val_budgets: null           # budgets to use during validation
+val_budgets: [0.2, 0.8]                 # budgets to use during validation

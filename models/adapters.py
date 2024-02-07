@@ -107,6 +107,7 @@ def adapt_torch_state_dict(state_dict, num_classes:int):
     # if num classes is different from the original, replace the head with a randomly initialized one
     old_head_shape = new_state_dict['head.weight'].shape
     if old_head_shape[0] != num_classes:
+        print('Loading weights for a different number of classes. Replacing head with random weights. You should fine-tune the model.')
         new_head_shape = (num_classes, old_head_shape[1])
         new_state_dict['head.weight'] = torch.zeros(new_head_shape)
         new_state_dict['head.bias'] = torch.zeros(num_classes)

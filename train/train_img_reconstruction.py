@@ -94,23 +94,24 @@ def train(cfg: DictConfig):
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
-            out = model(batch)
+            out, reconstructed_input, mask = model(batch)
+            
             main_loss = main_criterion(out, labels) 
+            reconstruction_loss = torch.mean(((batch-reconstructed_input)**2)*mask) # TODO only compute loss on pixels that are masked
             add_loss_dict, add_loss_val = {}, 0.0
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(
                     model, 
                     budget=model.current_budget,
-                    channel_budget=getattr(model, 'current_channel_budget', None),
+                    channel_budget=getattr(model, 'current_channel_budget', None), 
                     dict_prefix='train/')
-            loss = main_loss + add_loss_val
+            loss = main_loss + add_loss_val + reconstruction_loss
             loss.backward()
             # Apply gradient clipping
             if training_args['clip_grad_norm'] is not None:
                 clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
-            logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
-        
+            logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item(), 'train/reconstruction_loss':reconstruction_loss.detach().item()} | add_loss_dict)
         if scheduler:
             logger.log({'train/lr': scheduler.get_last_lr()[0]})
             scheduler.step()
@@ -121,7 +122,7 @@ def train(cfg: DictConfig):
         batches_loss = 0
         for batch, labels in tqdm(loader, desc=f'Validation epoch {epoch} {budget}'):
             batch, labels = batch.to(device), labels.to(device)
-            out = model(batch)
+            out, _, _ = model(batch)
             val_loss = main_criterion(out, labels) 
             predicted = torch.argmax(out, 1)
             metric(predicted, labels)
@@ -136,8 +137,8 @@ def train(cfg: DictConfig):
     # validation loop
     @torch.no_grad()
     def validate(model, loader, epoch):
-        model.eval()
         val_budgets = cfg.training.val_budgets or [1.]
+        model.eval()
         if hasattr(model, 'set_budget'):
             for budget in val_budgets:
                 model.set_budget(budget)
@@ -174,7 +175,28 @@ def train(cfg: DictConfig):
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
                 img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
+    
+
+    def plot_reconstructed_images_in_training(model, budgets):
         
+        subset_idcs = torch.arange(0, len(val_dataset), len(val_dataset)//training_args['num_images_to_plot'])
+        images_to_plot = Subset(val_dataset, subset_idcs)
+        from peekvit.utils.visualize import plot_reconstructed_images
+        for budget in budgets:
+
+            model.set_budget(budget)
+
+            images = plot_reconstructed_images(
+                            model,
+                            images_to_plot,
+                            model_transform=None,
+                            visualization_transform=dataset.denormalize_transform,
+                        )
+            
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)
+            os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/reconstructed_budget_{budget}', exist_ok=True)
+            for i, (_, img) in enumerate(images.items()):
+                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/reconstructed_budget_{budget}/reconstructed_img_{subset_idcs[i]}.png')
         
     
     # Training
@@ -193,6 +215,10 @@ def train(cfg: DictConfig):
                 plot_masks_in_training(model, cfg.training.val_budgets)
             else:
                 print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
+        
+        if training_args['plot_reconstructed_images_every'] != -1 and epoch % training_args['plot_reconstructed_images_every'] == 0:
+            plot_reconstructed_images_in_training(model, cfg.training.val_budgets)
+            
             
 
 

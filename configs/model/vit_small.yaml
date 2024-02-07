@@ -4,5 +4,5 @@ image_size: ${dataset.image_size}
 patch_size: 16
 hidden_dim: 384
 mlp_dim: 1536
-num_layers: 6
+num_layers: 8
 num_heads: 8

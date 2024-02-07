@@ -33,10 +33,10 @@ def res_linear_flops_counter_hook(module, input, output):
     module.__flops__ += int(torch.sum((input_last_dim * output_last_dim + bias_flops) * pre_last_dims_prod))
 
     if not hasattr(module, 'avg_sparsity'):
-        module.avg_sparsity = 0 #count_masked_tokens(input, per_sequence=False)
+        module.avg_sparsity = torch.tensor(0.)  #count_masked_tokens(input, per_sequence=False)
     else:
         masked_tokens = count_masked_tokens(input, per_sequence=False)
-        module.avg_sparsity += masked_tokens
+        module.avg_sparsity = module.avg_sparsity + masked_tokens.to(module.avg_sparsity.device)
     
 
 # this is standard the hook for a standard multihead attention layer:
@@ -107,10 +107,10 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
     multihead_attention_module.__flops__ += int(flops.sum())
     
     if not hasattr(multihead_attention_module, 'avg_sparsity'):
-        multihead_attention_module.avg_sparsity = 0 #count_masked_tokens(q, per_sequence=False) 
+        multihead_attention_module.avg_sparsity = torch.tensor(0.) #count_masked_tokens(q, per_sequence=False) 
     else:
         num_masked_tokens = count_masked_tokens(q, per_sequence=False) 
-        multihead_attention_module.avg_sparsity += num_masked_tokens
+        multihead_attention_module.avg_sparsity = multihead_attention_module.avg_sparsity + num_masked_tokens.to(multihead_attention_module.avg_sparsity.device)
 
 
 
@@ -141,8 +141,11 @@ def compute_flops(model,
         )
     
     # flops = 2 * macs
-
-    return macs * 2, params
+    if macs is None:
+        print('Something went wrong with the flops count: macs is None. Returning zero flops')
+        return torch.tensor(0.), params
+    else:
+        return macs * 2, params
 
 # usage 
 """macs, params = get_model_complexity_info(

@@ -19,6 +19,9 @@ device: 'cuda:0'
 seed: 0
 load_from: #['${experiments_dir}/2024_01_16_14_32_13_vit_bb_16_sb_'] #, '${experiments_dir}/2024_01_04_14_38_28_single_budget_strict']
 
+hydra:
+  run:
+    dir: '${experiments_dir}/${experiment_name}/'
 
 
 defaults:

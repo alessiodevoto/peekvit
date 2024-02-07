@@ -39,7 +39,10 @@ def validate(
     
 
     # if model parameters are not specified in the config file, load the model from the checkpoint
-    model, _, epoch, _, _ = load_state(model_checkpoint, model=model, strict=True)
+    epoch = 'unknown'
+    if model_checkpoint is not None:
+        model, _, epoch, _, _ = load_state(model_checkpoint, model=model, strict=True)
+    
     model.eval()
     model.to(device)
     
@@ -150,7 +153,9 @@ def test(cfg: DictConfig):
 
     # check arguments
     if cfg.load_from is None:
-        raise ValueError('"load_from" must be specified to load a model from a checkpoint.')
+        print('No model checkpoint provided.')
+        l, _ = make_experiment_directory(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+        load_from = [l]
     elif isinstance(cfg.load_from, str):
         load_from = [cfg.load_from]
     else:
@@ -171,7 +176,7 @@ def test(cfg: DictConfig):
     # if a model is provided in the config file, load it
     model = None
     if 'model' in cfg:
-        print('Instantiating new model from config file. \nIf you want to load a model from a checkpoint, remove the "model" field from the config file.')
+        print('Instantiating new model from config file.')
         model = instantiate(cfg.model)
         model = model.to(device)
 
@@ -205,7 +210,7 @@ def test(cfg: DictConfig):
         # in the first case we need to plot the results with noise
         noises = cfg.test.noises
         validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
-        print('Validating with noise: ', validating_with_noise)
+
         if validating_with_noise:
             plot_budget_and_noise_recap(
                 accs_per_budget=results_per_budget,
@@ -220,6 +225,12 @@ def test(cfg: DictConfig):
         # store results in dictionary
         all_results_per_budget[experiment_dir] = results_per_budget
         all_results_per_flops[experiment_dir] = results_per_flops
+
+    # Notice that all_results_per_flops is a dictionary of dictionaries
+    # If validating with noise, it is like this: 
+        # {experiment_dir : {flops : {noise : acc}}}
+    # If not validating with noise, it is like this:
+        # {experiment_dir : {flops : acc}}
     
     # plot cumulative results in case we have more than one experiment
     if cfg.test.cumulative_plot:
@@ -235,12 +246,16 @@ def test(cfg: DictConfig):
             plot_cumulative_budget_and_noise_recap(
                 all_results_per_flops, 
                 additional_x_labels=cfg.test.budgets,
-                save_dir=cumulative_plot_dir) 
+                save_dir=cumulative_plot_dir,
+                run_names=cfg.test.run_names
+                ) 
         else:
             plot_cumulative_budget_recap(
                 run_accs_per_budget=all_results_per_budget, 
                 run_accs_per_flops=all_results_per_flops,
-                save_dir=cumulative_plot_dir)
+                save_dir=cumulative_plot_dir,
+                run_names=cfg.test.run_names
+                )
      
 
     

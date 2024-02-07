@@ -222,8 +222,8 @@ def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=Fal
         # create model based on saved state
         # TODO edit this to load with hydra
         print('Creating model based on saved state')
-        print(state['model_class'])
-        print(state['model_args'])
+        print('Model class: ', state['model_class'])
+        print('Model args: ', state['model_args'])
         state['model_args'].pop('torch_pretrained_weights', None)
         state['model_args'].pop('_target_', None)
         model = build_model(state['model_class'], state['model_args'], state['noise_args'])
@@ -259,6 +259,9 @@ def get_checkpoint_path(experiment_dir, epoch='last'):
         str: The path of the checkpoint corresponding to the given epoch in the experiment directory.
     """
     checkpoints_dir = join(experiment_dir, 'checkpoints')
+    
+    if not os.path.exists(checkpoints_dir) or os.listdir(checkpoints_dir) == []:
+        return None
 
     if epoch is None or epoch == 'last':
         checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
