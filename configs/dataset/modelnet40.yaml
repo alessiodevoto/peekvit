@@ -1,6 +1,0 @@
-_target_: peekvit.data.modelnet40.ModelNet40
-root: '${workspace}/modelnet40_dataset'
-num_classes: 40                 # used by default by model as well
-num_points: 2048
-augmentation_ops: 2
-augmentation_magnitude: 9   

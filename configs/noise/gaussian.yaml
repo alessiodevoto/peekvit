@@ -1,4 +1,0 @@
-noise_type: 'gaussian'
-layer: 2          # this is the layer where the noise is added
-std: null         # standard deviation of the gaussian noise, can also be set at runtime, see peekvit/blocks/noise.py
-snr: null         # snr of the gaussian noise, can also be set at runtime, see blocks.py

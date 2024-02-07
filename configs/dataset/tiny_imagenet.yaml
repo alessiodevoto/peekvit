@@ -1,6 +1,0 @@
-_target_: peekvit.data.tinyimagenet.TinyImageNet
-root: '${workspace}/tiny_imagenet'
-image_size: 224       # used by default by model as well 
-num_classes: 200      # used by default by model as well
-augmentation_ops: 2
-augmentation_magnitude: 9  
