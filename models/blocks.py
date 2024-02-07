@@ -107,6 +107,9 @@ class NoiseBlock(nn.Module):
  
       if not any([snr, std, prob]):
         print('Lazy initialization of noise block. Please set the noise parameters using set_snr, set_std or set_prob before using the block.')
+      
+      if std:
+          raise ValueError('std is not supported anymore. Please use snr instead.')
 
 
     def forward_snr(self, x: torch.Tensor):

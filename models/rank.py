@@ -3,8 +3,6 @@ from torch import nn
 import torch.nn.functional as F
 import math
 from typing import Optional, List
-from abc import ABC
-from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
 from pytorch3d.ops import knn_points
 from einops.layers.torch import Reduce
 
