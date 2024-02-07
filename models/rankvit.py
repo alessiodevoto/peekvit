@@ -256,7 +256,7 @@ class RankVisionTransformer(nn.Module):
 
         if torch_pretrained_weights is not None:
             from .adapters import adapt_torch_state_dict
-            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict()
+            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict(progress=False)
             adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
             self.load_state_dict(adapted_state_dict, strict=True)
 
