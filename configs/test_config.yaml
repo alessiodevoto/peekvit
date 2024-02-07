@@ -11,7 +11,7 @@
 #         ├── logs.txt
 #
 
-workspace: '/home/aledev/projects/peekvit-workspace/peekvit'
+workspace: '/home/alebai/projects/peekvit-workspace/peekvit'
 experiments_dir: '${workspace}/runs'
 experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
@@ -26,9 +26,9 @@ hydra:
 
 defaults:
   - logger: local
-  - dataset: imagenette
+  - dataset: modelnet40
   - model: null
-  - noise: no_noise 
+  - noise: no_noise
   - test: base
   - _self_
 
