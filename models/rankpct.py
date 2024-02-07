@@ -123,16 +123,23 @@ class RankingPCTBlock(nn.Module):
         input = self.mask_tokens(input) # only has effect during training
         input = self.drop_tokens(input) # only has effect during evaluation
 
-        x = self.ln_1(input)  
-        x = self.mask_tokens(x)      
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
+        #x = self.ln_1(input)  
+        #x = self.mask_tokens(x)      
+        #x = self.self_attention(x)
+        #x = self.dropout(x)
+        #x = x + input
 
-        y = self.ln_2(x)
-        y = self.mask_tokens(y)
-        y = self.mlp(y)
-        return x + y
+        #y = self.ln_2(x)
+        #y = self.mask_tokens(y)
+        #y = self.mlp(y)
+
+        x = self.ln_1(input)
+        x = self.mask_tokens(x)
+        x = self.self_attention(x) + x
+        x = self.mlp(self.mask_tokens(self.ln_2(x))) + x
+
+
+        return x# + y
     
 
     def set_budget(self, budget: float):
@@ -227,7 +234,7 @@ class Classf_head(nn.Module):
         return x
 
 
-class PointCloudTransformer(nn.Module):
+class RankPointCloudTransformer(nn.Module):
 
     def __init__(
             self,
@@ -303,17 +310,17 @@ class PointCloudTransformer(nn.Module):
             x = torch.cat([self.registers.expand(b, -1, -1), x], dim=1)
 
         # Add class tokens
-        x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
+        #x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
 
         # Pass through PCT Encoder
         x = self.encoder(x)
 
         # Sum class tokens (?)
-        x = x[:, 0:self.num_class_tokens]
-        x = torch.sum(x, dim=1)
+        #x = x[:, 0:self.num_class_tokens]
+        #x = torch.sum(x, dim=1)
 
         #TEST, Average pooling
-        #x = torch.mean(x, dim=1)
+        x = torch.mean(x, dim=1)
 
         # Classification Head
         x = self.head(x)
