@@ -1,4 +1,4 @@
 _target_: peekvit.utils.logging.WandbLogger
-wandb_entity: 'baiocchi'     # set to your username
+wandb_entity: 'aledevo'     # set to your username
 wandb_project: 'peekvit'    # set to your project name
 wandb_run: '${experiment_name}'
