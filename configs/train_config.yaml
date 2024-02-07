@@ -11,7 +11,7 @@
 #
 
 
-workspace: '/home/aledev/projects/peekvit-workspace/peekvit'
+workspace: '/home/alebai/projects/peekvit-workspace/peekvit'
 experiments_dir: '${workspace}/runs/'
 experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
@@ -27,8 +27,8 @@ hydra:
 
 defaults:
   - logger: wandb
-  - dataset: imagenette
-  - model: vit_tiny
+  - dataset: modelnet40
+  - model: pct
   - training: base
   - optimizer: adam
   - scheduler: null
