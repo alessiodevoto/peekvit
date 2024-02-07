@@ -158,7 +158,7 @@ class PointCloudTransformer(nn.Module):
             num_classes: int = 40,
             representation_size: Optional[int] = None,
             num_registers: int = 0,
-            num_class_tokens: int = 0,
+            num_class_tokens: int = 1,
             torch_pretrained_weights: Optional[str] = None,
     ):
         super().__init__()
@@ -176,6 +176,7 @@ class PointCloudTransformer(nn.Module):
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
         
         # Add class tokens
+
         self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
 
         # Add registers
@@ -219,17 +220,17 @@ class PointCloudTransformer(nn.Module):
             x = torch.cat([self.registers.expand(b, -1, -1), x], dim=1)
 
         # Add class tokens
-        #x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
+        x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
 
         # Pass through PCT Encoder
         x = self.encoder(x)
 
         # Sum class tokens (?)
-        #x = x[:, 0:self.num_class_tokens]
-        #x = torch.sum(x, dim=1)
+        x = x[:, 0:self.num_class_tokens]
+        x = torch.sum(x, dim=1)
 
         #TEST, Average pooling
-        x = torch.mean(x, dim=1)
+        #x = torch.mean(x, dim=1)
 
         # Classification Head
         x = self.head(x)
