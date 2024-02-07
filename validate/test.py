@@ -225,6 +225,12 @@ def test(cfg: DictConfig):
         # store results in dictionary
         all_results_per_budget[experiment_dir] = results_per_budget
         all_results_per_flops[experiment_dir] = results_per_flops
+
+    # Notice that all_results_per_flops is a dictionary of dictionaries
+    # If validating with noise, it is like this: 
+        # {experiment_dir : {flops : {noise : acc}}}
+    # If not validating with noise, it is like this:
+        # {experiment_dir : {flops : acc}}
     
     # plot cumulative results in case we have more than one experiment
     if cfg.test.cumulative_plot:
@@ -240,7 +246,9 @@ def test(cfg: DictConfig):
             plot_cumulative_budget_and_noise_recap(
                 all_results_per_flops, 
                 additional_x_labels=cfg.test.budgets,
-                save_dir=cumulative_plot_dir) 
+                save_dir=cumulative_plot_dir,
+                run_names=cfg.test.run_names
+                ) 
         else:
             plot_cumulative_budget_recap(
                 run_accs_per_budget=all_results_per_budget, 

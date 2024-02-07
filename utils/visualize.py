@@ -86,63 +86,84 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
 
 
 def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label="", run_names=None):
+    if run_accs_per_budget is not None:
+      fig, ax = plt.subplots()
+      for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
+        ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=string_to_color(i))
+        ax.set_xlabel('Budget')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Budget vs Accuracy')
+        plt.ylim([0.1, 0.9])
+        plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
-    fig, ax = plt.subplots()
-    for i , (run_id, accs_per_budget) in enumerate(run_accs_per_budget.items()):
-      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o', color=string_to_color(i))
-      ax.set_xlabel('Budget')
-      ax.set_ylabel('Accuracy')
-      ax.set_title('Budget vs Accuracy')
-      plt.ylim([0.1, 0.9])
-      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
+      plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
     
-    plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
-    plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc{additional_label}.png'))
-    
-    fig, ax = plt.subplots()
-    for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
-      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=string_to_color(i))
-      ax.set_xlabel('Flops')
-      ax.set_ylabel('Accuracy')
-      ax.set_title('Flops vs Accuracy')
-      plt.ylim([0.1, 0.9])
-      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    
-    plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
-    plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
+    if run_accs_per_flops is not None:
+      fig, ax = plt.subplots()
+      for i, (run_id, accs_per_flops) in enumerate(run_accs_per_flops.items()):
+        ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o', color=string_to_color(i))
+        ax.set_xlabel('Flops')
+        ax.set_ylabel('Accuracy')
+        ax.set_title('Flops vs Accuracy')
+        plt.ylim([0.1, 0.9])
+        plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      
+      plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
+      plt.savefig(os.path.join(save_dir, f'cumulative_flops_vs_acc{additional_label}.png'))
 
 
 def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, additional_label=""):
-    fig, ax = plt.subplots()
-    for budget, results in accs_per_budget.items():
-        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-        ax.set_xlabel('Noise')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Noise vs Accuracy across budgets')
-        ax.legend()
+    if accs_per_budget is not None:
+      fig, ax = plt.subplots()
+      for budget, results in accs_per_budget.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+          ax.set_xlabel('Noise')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Noise vs Accuracy across budgets')
+          ax.legend()
 
-    plt.ylim([0.1, 0.9])
-    plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+      plt.ylim([0.1, 0.9])
+      plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+
+    if accs_per_flops is not None:
+      fig, ax = plt.subplots()
+      for budget, results in accs_per_flops.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
+          ax.set_xlabel('Noise')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Noise vs Accuracy across flops')
+          ax.legend()
+      # plt.ylim([0.4, 0.9])
+      plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
+
+def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels="", run_names=None):
+
+    results_per_noise = {}
+    for exp_dir, flops_data in run_accs_per_flops.items():
+        for flop, noise_data in flops_data.items():
+            for noise, acc in noise_data.items():
+                if noise not in results_per_noise:
+                    results_per_noise[noise] = {}
+                if exp_dir not in results_per_noise[noise]:
+                    results_per_noise[noise][exp_dir] = {}
+                results_per_noise[noise][exp_dir][flop] = acc
+
+    print(results_per_noise)
+
+    for noise, exps in results_per_noise.items():
+        plot_cumulative_budget_recap(run_accs_per_budget=None, run_accs_per_flops=exps, save_dir=save_dir, additional_label=f'_noise_{noise}', run_names=run_names) 
+       
 
 
-    """fig, ax = plt.subplots()
-    for budget, results in accs_per_flops.items():
-        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-        ax.set_xlabel('Noise')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Noise vs Accuracy across budgets')
-        ax.legend()
-    # plt.ylim([0.4, 0.9])
-    plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))"""
-
-
-def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels=""):
+def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, additional_x_labels=""):
     # results per budget is a dict of dicts, where the first key is the budget and 
     # the second key is the noise value, and the value is the accuracy.
     # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
     # and we have a line for each noise
 
     # create new dictionary with noise as first key and budget as second key
+
 
     _results_per_noise = {}
     for run in run_accs_per_flops:
