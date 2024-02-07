@@ -11,7 +11,7 @@
 #
 
 
-workspace: '/home/aledev/projects/peekvit-workspace/peekvit'
+workspace: '<path_to_peekvit-workspace>'
 experiments_dir: '${workspace}/runs/'
 experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
