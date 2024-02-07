@@ -1,0 +1,7 @@
+_target_: peekvit.models.pct.PointCloudTransformer
+num_points: ${dataset.num_points}
+num_classes: ${dataset.num_classes}
+hidden_dim: 128
+mlp_dim: 256
+num_layers: 4
+num_heads: 4
