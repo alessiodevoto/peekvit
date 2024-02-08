@@ -101,7 +101,7 @@ class NoiseBlock(nn.Module):
     def __init__(self, noise_type: Literal['gaussian', 'token_drop'] = 'gaussian', snr = None, std = None, prob = None):
       super().__init__()
       self.noise_type = noise_type
-      self.snr = snr
+      self.snr_db = snr
       self.std = std
       self.prob = prob
  
@@ -120,11 +120,13 @@ class NoiseBlock(nn.Module):
       # compute the signal power
       signal_power = torch.mean(x ** 2, dim=-1, keepdim=True)
       # compute the noise power
-      noise_power = signal_power / self.snr
+      # noise_power = signal_power / self.snr
+      noise_power = (signal_power / (10**(self.snr_db / 10))) if self.snr_db != 0 else 0
       # compute the standard deviation of the noise
-      std = torch.sqrt(noise_power)
-      # add the noise
-      return x + torch.randn_like(x, requires_grad=False) * std
+      std = torch.sqrt(noise_power) if self.snr_db != 0 else 0
+      noise = torch.randn_like(x, requires_grad=False) * std
+      
+      return x + noise
   
     def forward_std(self, x: torch.Tensor):
       """
@@ -158,7 +160,7 @@ class NoiseBlock(nn.Module):
       Adds noise to the input according to the given signal to noise ratio.
       The input is assumed to be of shape (batch_size, sequence_length, hidden_dim).
       """
-      if self.snr is not None:
+      if self.snr_db is not None:
         return self.forward_snr(x)
       elif self.std is not None:
         return self.forward_std(x)
@@ -167,13 +169,13 @@ class NoiseBlock(nn.Module):
     
     def set_snr(self, snr: float):
       assert self.noise_type == 'gaussian'
-      self.snr = snr
+      self.snr_db = snr
       self.std = None
       self.prob = None
     
     def set_prob(self, prob: float):
       assert self.noise_type == 'token_drop'
-      self.snr = None
+      self.snr_db = None
       self.std = None
       self.prob = prob
 

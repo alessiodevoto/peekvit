@@ -75,3 +75,4 @@ In all the following scripts we pass the settings via CLI instead of editing the
 - fix enc dec as now computes loss for all tokens
 - config file for each model
 - change cuda float
+- change noise in config

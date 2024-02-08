@@ -27,7 +27,7 @@ hydra:
 defaults:
   - logger: wandb
   - dataset: imagenette
-  - model: null
+  - model: null             # if null, will try infer the model type form checkpoint, if possible.
   - noise: no_noise
   - test: base
   - _self_

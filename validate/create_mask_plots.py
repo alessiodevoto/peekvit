@@ -27,7 +27,7 @@ from peekvit.utils.visualize import plot_masked_images
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="test_config")
+@hydra.main(version_base=None, config_path="../configs", config_name="test_config_personal")
 @torch.no_grad()
 def test(cfg: DictConfig):
 

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List
 from abc import ABC
-from pytorch3d.ops import knn_points
+# from pytorch3d.ops import knn_points
 from einops.layers.torch import Reduce
 
 

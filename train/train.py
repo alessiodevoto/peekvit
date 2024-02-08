@@ -24,7 +24,7 @@ from peekvit.utils.visualize import plot_masked_images
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="train_config")
+@hydra.main(version_base=None, config_path="../configs", config_name="train_config_personal")
 def train(cfg: DictConfig):
 
     torch.manual_seed(cfg.seed)
