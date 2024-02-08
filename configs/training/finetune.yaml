@@ -9,5 +9,5 @@ num_images_to_plot: 10
 reinit_class_tokens: True         # reinitialize class tokens before training
 train_backbone: False             # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
 num_workers: 28
-val_budgets: [0.8]           # budgets to use during validation
-train_budgets: [0.8]               # budgets to use during training
+val_budgets: [0.2, 0.8]           # budgets to use during validation
+train_budgets: [0.2, 0.8]               # budgets to use during training
