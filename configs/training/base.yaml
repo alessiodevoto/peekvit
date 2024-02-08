@@ -11,3 +11,4 @@ train_backbone: True              # train backbone. If false, only train only he
 num_workers: 28
 train_budget: 0.9
 val_budgets: [0.2, 0.8]                 # budgets to use during validation
+train_budgets: [0.2, 0.8]               # budgets to use during training

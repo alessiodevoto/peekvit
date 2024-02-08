@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import math
-from typing import Optional, List
+from typing import Optional, List, Union
 from abc import ABC
 from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
 
@@ -10,12 +10,18 @@ from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Wei
 from .blocks import SelfAttention, MLP
  
 """
-Plain Vision Transformer.
+Vision Transformer that drops tokens across the batch in training.
 """
 
+# Drop Module
+class DropModule(nn.Module):
+    def __init__(self, drop_rate: float):
+        super().__init__()
+        
 
-# ViT Block
-class ViTBlock(nn.Module):
+
+# Batch ViT Block
+class BatchRankViTBlock(nn.Module):
     """Transformer encoder block."""
 
     def __init__(
@@ -41,9 +47,47 @@ class ViTBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(hidden_dim)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
 
+        # Drop tokens
+        self.drop = False
+        self.current_budget = 1.0
+    
+    def drop_tokens(self, input: torch.Tensor):
+        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+
+        if self.training and not self.drop:
+            return input
+
+        class_token = input[:, 0:1, :]
+        input = input[:, 1:, :]
+
+        # get token magnitudes
+        # (batch_size, seq_length, hidden_dim) -> (batch_size, seq_length)
+        token_magnitudes = torch.norm(input, dim=-1)
+
+        # average over batch
+        # (batch_size, seq_length) -> (seq_length)
+        avg_magnitudes = torch.mean(token_magnitudes, dim=0)
+
+        # get sorted indices
+        idx = torch.argsort(avg_magnitudes, descending=True)
+
+        # get the number of tokens to mask
+        num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
+
+        # drop tokens
+        input = input[:, idx[:num_tokens_to_keep], :]
+
+        # add class token back
+        input = torch.cat([class_token, input], dim=1)
+
+        return input
+
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
+        # notice that drop_tokens is implemented as no-op if sort_tokens is False
+        input = self.drop_tokens(input) # only has effect during training
+
         x = self.ln_1(input)
         x = self.self_attention(x)
         x = self.dropout(x)
@@ -52,17 +96,13 @@ class ViTBlock(nn.Module):
         y = self.ln_2(x)
         y = self.mlp(y)
         return x + y
-
-# Drop Module
-class DropModule(nn.Module):
-    def __init__(self, drop_rate: float):
-        super().__init__()
-        
+    
+    def set_budget(self, budget: float):
+        self.current_budget = budget
 
 
 # ViT Encoder
-
-class ViTEncoder(nn.Module):
+class BatchRankViTEncoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
     def __init__(
@@ -82,7 +122,7 @@ class ViTEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         layers: List = []
         for i in range(num_layers):
-            layers.append(ViTBlock(
+            layers.append(BatchRankViTBlock(
                             num_heads,
                             hidden_dim,
                             mlp_dim,
@@ -102,7 +142,7 @@ class ViTEncoder(nn.Module):
 
 
 
-class VisionTransformer(nn.Module):
+class BatchRankVisionTransformer(nn.Module):
     """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
 
     def __init__(
@@ -134,7 +174,7 @@ class VisionTransformer(nn.Module):
         self.num_heads = num_heads
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
-        
+
 
 
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
@@ -150,7 +190,7 @@ class VisionTransformer(nn.Module):
             self.register_tokens = nn.Parameter(torch.zeros(1, num_registers, hidden_dim))
             seq_length += num_registers
 
-        self.encoder = ViTEncoder(
+        self.encoder = BatchRankViTEncoder(
             seq_length,
             num_layers,
             num_heads,
@@ -227,3 +267,29 @@ class VisionTransformer(nn.Module):
         x = self.head(x)
 
         return x
+    
+
+    def enable_ranking(self, sort_tokens: Union[bool, List[bool]] = False):
+        """
+        Enable dropping for the BatchRankVit model.
+
+        Args:
+            sort_tokens (Union[bool, List[bool]], optional): 
+                A boolean value or a list of boolean values indicating whether to sort tokens for each BatchRankVit block. 
+                If a single boolean value is provided, it will be applied to all BatchRankVit blocks. 
+                If a list of boolean values is provided, each value will be applied to the corresponding RankVit block. 
+                Defaults to False.
+        """
+        if isinstance(sort_tokens, bool):
+            sort_tokens = [sort_tokens] * len(self.encoder.layers)
+
+        for rankvitblock, sort in zip(self.encoder.layers, sort_tokens):
+            rankvitblock.sort = sort
+    
+
+    def set_budget(self, budget: float):
+        self.current_budget = budget
+        for rankvitblock in self.encoder.layers:
+            if hasattr(rankvitblock, 'set_budget'):
+                rankvitblock.set_budget(budget)
+
