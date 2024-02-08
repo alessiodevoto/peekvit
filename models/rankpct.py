@@ -11,7 +11,7 @@ from einops.layers.torch import Reduce
 from .blocks import SelfAttention, MLP
  
 """
-Plain Point Cloud Transformer.
+Ranking Point Cloud Transformer.
 """
 
 
