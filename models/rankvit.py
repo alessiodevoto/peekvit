@@ -102,8 +102,10 @@ class RankViTBlock(nn.Module):
         return masked_input
     
 
-    def drop_tokens(self, input: torch.Tensor):
-        if self.training or not self.sort:
+    def drop_tokens(self, input: torch.Tensor, force_drop: bool = False):
+        if not self.sort:
+            return input
+        if self.training and not force_drop:
             return input
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         # we assume input is sorted in descending order
@@ -115,7 +117,7 @@ class RankViTBlock(nn.Module):
         return input[:, :num_tokens_to_keep, :]
     
 
-    def forward(self, input: torch.Tensor):
+    """"def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
         if self.sort:
@@ -134,7 +136,26 @@ class RankViTBlock(nn.Module):
         y = self.ln_2(x)
         y = self.mask_tokens(y)
         y = self.mlp(y)
+        return x + y"""
+    
+    def forward(self, input: torch.Tensor):
+        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
+
+        if self.sort:
+            input = self.sort_tokens(input)
+        
+        # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
+        input = self.drop_tokens(input, force_drop=True)
+
+        x = self.ln_1(input)  
+        x = self.self_attention(x)
+        x = self.dropout(x)
+        x = x + input
+
+        y = self.ln_2(x)
+        y = self.mlp(y)
         return x + y
+    
     
 
     def set_budget(self, budget: float):

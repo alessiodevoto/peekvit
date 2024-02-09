@@ -90,6 +90,12 @@ def train(cfg: DictConfig):
         model.train()
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
+        
+        if 'train_budget' in training_args:
+            print('Setting budget to ', training_args['train_budget'])
+            model.set_budget(training_args['train_budget'])
+            if hasattr(model, 'enable_ranking'):
+                model.enable_ranking(True)
 
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)

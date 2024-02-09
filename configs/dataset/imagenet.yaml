@@ -1,0 +1,7 @@
+_target_: peekvit.data.imagenet.ImageNetDataset
+root: '/hdd2/aledev/datasets/imagenet'
+image_size: 224
+split: 'val'
+num_classes: 1000                 # used by default by model as well  
+augmentation_ops: 2
+augmentation_magnitude: 9   

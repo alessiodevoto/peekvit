@@ -126,6 +126,27 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
       plt.ylim([0.1, 0.9])
       plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
 
+      print(accs_per_budget)
+      fig, ax = plt.subplots()
+      # flip the dictionary so that we have noise as the first key
+      results_per_noise = {}
+      for budget, results in accs_per_budget.items():
+          for noise, acc in results.items():
+              if noise not in results_per_noise:
+                  results_per_noise[noise] = {}
+              results_per_noise[noise][budget] = acc
+      print(results_per_noise)
+      # plot the noise vs accuracy
+      for noise, results in results_per_noise.items():
+          ax.plot(results.keys(), results.values(), marker='o', label=f'noise {noise}')
+          ax.set_xlabel('Budget')
+          ax.set_ylabel('Accuracy')
+          ax.set_title('Budget vs Accuracy across noises')
+          ax.legend()
+      plt.ylim([0.1, 0.9])
+      plt.savefig(os.path.join(save_dir, f'noise_vs_budget_vs_acc{additional_label}.png'))
+
+
     if accs_per_flops is not None:
       fig, ax = plt.subplots()
       for budget, results in accs_per_flops.items():
@@ -136,6 +157,8 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.legend()
       # plt.ylim([0.4, 0.9])
       plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
+    
+    
 
 def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels="", run_names=None):
 

@@ -93,13 +93,15 @@ def validate(
             if noise_module:
                 noise_module.set_value(val)
             
-            # compute accuracy given budget
+            
+            # compute accuracy given budget and noise
             for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} - {val}'):
                 batch, labels = batch.to(device), labels.to(device)
                 
                 out = model(batch)
                 predicted = torch.argmax(out, 1)
                 metric.update(predicted, labels)
+
             
             acc = metric.compute()
             metric.reset()
@@ -206,7 +208,7 @@ def test(cfg: DictConfig):
             model=model,
             )
         
-        # these might be <buget -> noise -> acc > or <budget, acc>
+        # these might be {flops/budget : {noise : acc} or {flops/budget : acc}
         # in the first case we need to plot the results with noise
         noises = cfg.test.noises
         validating_with_noise = noises is not None and len(noises) > 0 and cfg.noise != {}
