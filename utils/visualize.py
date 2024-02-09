@@ -89,7 +89,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
 def plot_timing_recap(timings_per_budgets, timings_per_flops, save_dir, additional_label=""):
     if timings_per_budgets is not None:
       fig, ax = plt.subplots()
-      ax.plot(list(timings_per_budgets.keys())[1:], list(timings_per_budgets.values())[1:], marker='o')
+      ax.plot(timings_per_budgets.keys(), timings_per_budgets.values(), marker='o')
       ax.set_xlabel('Budget')
       ax.set_ylabel('Throughput (images/s)')
       ax.set_title('Budget vs Throughput')
@@ -98,7 +98,7 @@ def plot_timing_recap(timings_per_budgets, timings_per_flops, save_dir, addition
 
     if timings_per_flops is not None:
       fig, ax = plt.subplots()
-      ax.plot(list(timings_per_flops.keys())[1:], list(timings_per_flops.values())[1:], marker='o')
+      ax.plot(timings_per_flops.keys(), timings_per_flops.values(), marker='o')
       ax.set_xlabel('Flops')
       ax.set_ylabel('Throughput (images/s)')
       ax.set_title('Flops vs Throughput')

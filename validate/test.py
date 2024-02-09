@@ -24,6 +24,12 @@ from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative
 from peekvit.utils.flops_count import compute_flops
 
 
+def move_dataset_to_device(dataloder, device):
+    print('Moving dataset to device for testing infernce speed: ', device)
+    for batch, labels in dataloder:
+        batch.to(device), labels.to(device)
+
+
 
 
 def validate(
@@ -45,6 +51,8 @@ def validate(
     
     model.eval()
     model.to(device)
+
+    move_dataset_to_device(val_loader, device)
     
 
     # sanity check that model has budget
@@ -206,7 +214,8 @@ def test(cfg: DictConfig):
 
 
         model_checkpoint_path = get_checkpoint_path(experiment_dir)
-        print('Loading model from checkpoint: ', model_checkpoint_path)
+        if model_checkpoint_path is not None:
+            print('Loading model from checkpoint: ', model_checkpoint_path)
 
         # validate
         results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops = validate(
