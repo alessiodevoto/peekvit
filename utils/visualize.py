@@ -65,24 +65,45 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
     - accs_per_flops (dict): A dictionary mapping budget values to accuracy values.
     - save_dir (str): The directory where the plot images will be saved.
     """
-    
-    fig, ax = plt.subplots()
-    ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o')
-    ax.set_xlabel('Budget')
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Budget vs Accuracy')
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ylim([0.1, 0.9])
-    plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
+    if accs_per_budget is not None:
+      fig, ax = plt.subplots()
+      ax.plot(accs_per_budget.keys(), accs_per_budget.values(), marker='o')
+      ax.set_xlabel('Budget')
+      ax.set_ylabel('Accuracy')
+      ax.set_title('Budget vs Accuracy')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.ylim([0.1, 0.9])
+      plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
 
-    fig, ax = plt.subplots()
-    ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o')
-    ax.set_xlabel('Flops')
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Flops vs Accuracy')
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ylim([0.1, 0.9])
-    plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
+    if accs_per_flops is not None:
+      fig, ax = plt.subplots()
+      ax.plot(accs_per_flops.keys(), accs_per_flops.values(), marker='o')
+      ax.set_xlabel('Flops')
+      ax.set_ylabel('Accuracy')
+      ax.set_title('Flops vs Accuracy')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.ylim([0.1, 0.9])
+      plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
+
+
+def plot_timing_recap(timings_per_budgets, timings_per_flops, save_dir, additional_label=""):
+    if timings_per_budgets is not None:
+      fig, ax = plt.subplots()
+      ax.plot(list(timings_per_budgets.keys())[1:], list(timings_per_budgets.values())[1:], marker='o')
+      ax.set_xlabel('Budget')
+      ax.set_ylabel('Throughput (images/s)')
+      ax.set_title('Budget vs Throughput')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.savefig(os.path.join(save_dir, f'budget_vs_throughput{additional_label}.png'))
+
+    if timings_per_flops is not None:
+      fig, ax = plt.subplots()
+      ax.plot(list(timings_per_flops.keys())[1:], list(timings_per_flops.values())[1:], marker='o')
+      ax.set_xlabel('Flops')
+      ax.set_ylabel('Throughput (images/s)')
+      ax.set_title('Flops vs Throughput')
+      plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+      plt.savefig(os.path.join(save_dir, f'flops_vs_throughput{additional_label}.png'))
 
 
 def plot_cumulative_budget_recap(run_accs_per_budget, run_accs_per_flops, save_dir, additional_label="", run_names=None):

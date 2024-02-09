@@ -62,6 +62,7 @@ In all the following scripts we pass the settings via CLI instead of editing the
 - Test a model that has a budget token with different budgets `python validate/test.py load_from=<path_to_experiment_directory> noise=gaussian noise.layer=2 'test.noises=[0.2, 0.4]'`
 - Test a RankingVit initialized with the checkpoint of a ViT `python validate/test.py model=rankvit load_from=<path_to_experiment_directory>`
 - Plot the class tokens and their distances for a pretrained vit_b_16 `python validate/create_cls_token_plots.py test.num_images=10 model=vit_b_16 dataset.image_size=224 model.torch_pretrained_weights=ViT_B_16_Weights['IMAGENET1K_V1']`
+- Run evaluation on a pretrained vision transformer on imagenet `CUDA_VISIBLE_DEVICES=3 python validate/test.py noise=no_noise  model=vit_b_16_pretrained dataset=imagenet test.test_batch_size=2048`
 
 
 

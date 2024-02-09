@@ -13,14 +13,14 @@ from torch.utils.data import DataLoader
 import torch
 from tqdm import tqdm
 from os.path import join
-import argparse
 from hydra.utils import instantiate
 from peekvit.utils.utils import get_checkpoint_path, make_experiment_directory, load_state, add_noise
 import hydra
 from pprint import pprint
+import time
 
 from peekvit.utils.utils import load_state, add_noise, make_experiment_directory
-from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_budget_recap, plot_cumulative_budget_and_noise_recap
+from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_budget_recap, plot_timing_recap, plot_cumulative_budget_and_noise_recap
 from peekvit.utils.flops_count import compute_flops
 
 
@@ -76,36 +76,44 @@ def validate(
     results_per_budget = defaultdict(dict)
     results_per_flops = defaultdict(dict)
     
+    timings_per_budget = defaultdict(dict)
+    timings_per_flops = defaultdict(dict)
+
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=model.num_classes).to(device)
 
     
     for budget in budgets:
 
         results_per_budget[budget] = {}
+        timings_per_budget[budget] = {}
 
         if hasattr(model, 'set_budget'):
             model.set_budget(budget)
             
         accs = []
         
-        for val in noise_vals:
+        for noise_val in noise_vals:
 
             if noise_module:
-                noise_module.set_value(val)
+                noise_module.set_value(noise_val)
             
+            start_time = time.time()
             
             # compute accuracy given budget and noise
-            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} - {val}'):
+            for batch, labels in tqdm(val_loader, desc=f'Testing epoch {epoch}, budget {budget}, noise: {noise_type} - {noise_val}'):
                 batch, labels = batch.to(device), labels.to(device)
                 
                 out = model(batch)
                 predicted = torch.argmax(out, 1)
                 metric.update(predicted, labels)
 
+            elapsed_time = time.time() - start_time
+            images_per_second = len(val_loader.dataset) / elapsed_time
+            
             
             acc = metric.compute()
             metric.reset()
-            logger.log({f'test/budget_{budget}/noise_{val}': acc})
+            logger.log({f'test/budget_{budget}/noise_{noise_val}': acc})
             accs.append(acc)
 
             flops = 0
@@ -125,17 +133,21 @@ def validate(
             # check that the expected value is correct
             flops /= len(val_loader)        
             
-            if val is not None:
-                results_per_budget[budget][val] = acc.item()
-                results_per_flops[flops][val] = acc.item()
+            if noise_val is not None:
+                results_per_budget[budget][noise_val] = acc.item()
+                results_per_flops[flops][noise_val] = acc.item()
+                timings_per_budget[budget][noise_val] = images_per_second
+                timings_per_flops[flops][noise_val] = images_per_second
             else:
                 results_per_budget[budget] = acc.item()
                 results_per_flops[flops] = acc.item()
+                timings_per_budget[budget] = images_per_second
+                timings_per_flops[flops] = images_per_second
 
     logger.log({'flops': results_per_flops, 'budget': results_per_budget})
     # print('Results per budget: ', results_per_budget)
     # print('Results per flops: ', results_per_flops)
-    return results_per_budget, results_per_flops
+    return results_per_budget, results_per_flops, timings_per_budget, timings_per_flops
 
 
 
@@ -197,7 +209,7 @@ def test(cfg: DictConfig):
         print('Loading model from checkpoint: ', model_checkpoint_path)
 
         # validate
-        results_per_budget, results_per_flops = validate(
+        results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops = validate(
             model_checkpoint_path, 
             logger,
             val_loader, 
@@ -222,7 +234,14 @@ def test(cfg: DictConfig):
             plot_budget_recap(
                 accs_per_budget=results_per_budget,
                 accs_per_flops =results_per_flops,
-                save_dir=os.path.join(experiment_dir, 'images'))        
+                save_dir=os.path.join(experiment_dir, 'images'))  
+            
+            plot_timing_recap(
+                timings_per_budgets,
+                timings_per_flops,
+                save_dir=os.path.join(experiment_dir, 'images'))
+
+
         
         # store results in dictionary
         all_results_per_budget[experiment_dir] = results_per_budget
