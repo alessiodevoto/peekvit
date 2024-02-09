@@ -266,8 +266,8 @@ class RankPointCloudTransformer(nn.Module):
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
         
         # Add class tokens
-
-        self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
+        if num_class_tokens > 0:
+            self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
 
         # Add registers
         if num_registers > 0:
@@ -310,17 +310,19 @@ class RankPointCloudTransformer(nn.Module):
             x = torch.cat([self.registers.expand(b, -1, -1), x], dim=1)
 
         # Add class tokens
-        #x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
+        if self.num_class_tokens > 0:
+            x = torch.cat([self.class_tokens.expand(b, -1, -1), x], dim=1)
 
         # Pass through PCT Encoder
         x = self.encoder(x)
 
-        # Sum class tokens (?)
-        #x = x[:, 0:self.num_class_tokens]
-        #x = torch.sum(x, dim=1)
-
-        #TEST, Average pooling
-        x = torch.mean(x, dim=1)
+        if self.num_class_tokens > 0:
+            # Sum class tokens (?)
+            x = x[:, 0:self.num_class_tokens]
+            x = torch.sum(x, dim=1)
+        else:
+            # Average pooling
+            x = torch.mean(x, dim=1)
 
         # Classification Head
         x = self.head(x)
