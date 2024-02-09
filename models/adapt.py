@@ -2,21 +2,51 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import math
-from typing import Optional, List, Union
+from typing import Optional, List
+from abc import ABC
 from pytorch3d.ops import knn_points
 from einops.layers.torch import Reduce
 
 
 
-from .blocks import SelfAttention, MLP
+from .blocks import SelfAttention, MLP, GumbelSoftmax
  
 """
-Ranking Point Cloud Transformer.
+Adaptive Point Cloud Transformer.
 """
 
+#DropPredictor from dynamicViT
+class DropPredictor(nn.Module):
+    """ Computes the log-probabilities of dropping a token, adapted from PredictorLG here:
+    https://github.com/raoyongming/DynamicViT/blob/48ac52643a637ed5a4cf7c7d429dcf17243794cd/models/dyvit.py#L287 """
+    def __init__(self, embed_dim):
+        super().__init__()
+
+        self.in_conv = nn.Sequential(
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, embed_dim),
+            nn.GELU()
+        )
+
+        self.out_conv = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim // 2),
+            nn.GELU(),
+            nn.Linear(embed_dim // 2, embed_dim // 4),
+            nn.GELU(),
+            nn.Linear(embed_dim // 4, 2),
+            nn.Softmax(dim=-1)
+        )
+
+    def forward(self, x, prev_decision):
+        x = self.in_conv(x)
+        B, N, C = x.size()
+        local_x = x[:,:, :C//2]
+        global_x = (x[:,:, C//2:] * prev_decision).sum(dim=1, keepdim=True) / (torch.sum(prev_decision, dim=1, keepdim=True)+1e-20)
+        x = torch.cat([local_x, global_x.expand(B, N, C//2)], dim=-1)
+        return self.out_conv(x)
 
 # PCT Block
-class RankingPCTBlock(nn.Module):
+class AdaPTBlock(nn.Module):
     """Transformer encoder block."""
 
     def __init__(
@@ -41,111 +71,24 @@ class RankingPCTBlock(nn.Module):
         # MLP block
         self.ln_2 = nn.LayerNorm(hidden_dim)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
-    
-        # Sort tokens
-        self.sort = False
-        self.current_budget = 1.0
-    
-    @staticmethod
-    def sort_tokens(input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
-        class_token = input[:, 0:1, :]
-        input = input[:, 1:, :]
-
-        # get token magnitudes
-        # (batch_size, seq_length, hidden_dim) -> (batch_size, seq_length)
-        token_magnitudes = torch.norm(input, dim=-1)
-        
-        # get sorted indices 
-        # (batch_size, seq_length) -> (batch_size, seq_length, 1)
-        sorted_indices = torch.argsort(token_magnitudes, dim=-1, descending=True)
-        sorted_indices = sorted_indices.unsqueeze(-1)
-
-        # gather sorted input
-        sorted_input = torch.gather(input, dim=1, index=sorted_indices.expand(-1, -1, input.shape[-1]))
-
-        sorted_input = torch.cat([class_token, sorted_input], dim=1)
-        return sorted_input
-    
-
-    def mask_tokens(self, input: torch.Tensor):
-        if not self.training or not self.sort:
-            return input
-
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        # we assume input is sorted in descending order
-        # the last n% tokens are masked by setting them to 0
-        # where n is the current budget
-
-        class_token = input[:, 0:1, :]
-        input = input[:, 1:, :]
-
-        # get the number of tokens to mask
-        # (batch_size, seq_length) -> (batch_size, seq_length)
-        num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
-
-        
-        # mask the tokens
-        # (batch_size, seq_length) -> (batch_size, seq_length, 1)
-        mask = torch.zeros_like(input)
-        mask[:, :num_tokens_to_keep, :] = 1
-        
-        # apply the mask
-        # (batch_size, seq_length, hidden_dim) -> (batch_size, seq_length, hidden_dim)
-        masked_input = input * mask
-
-        masked_input = torch.cat([class_token, masked_input], dim=1)
-
-        return masked_input
-    
-
-    def drop_tokens(self, input: torch.Tensor):
-        if self.training or not self.sort:
-            return input
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        # we assume input is sorted in descending order
-        # the last n% tokens are masked by setting them to 0
-        # where n is the current budget
-
-        num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
-
-        return input[:, :num_tokens_to_keep, :]
-    
-
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: torch.Tensor, mask: Optional[torch.Tensor] = None):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
-        if self.sort:
-            input = self.sort_tokens(input)
-        
-        # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
-        input = self.mask_tokens(input) # only has effect during training
-        input = self.drop_tokens(input) # only has effect during evaluation
-
-        #x = self.ln_1(input)  
-        #x = self.mask_tokens(x)      
-        #x = self.self_attention(x)
+        x = self.ln_1(input)
+        if mask is not None:
+            mask = torch.logical_not(mask)
+            x = self.self_attention(x, mask)
+        else:
+            x = self.self_attention(x)
+        x = x + input
+        x = self.mlp(self.ln_2(x)) + x
         #x = self.dropout(x)
         #x = x + input
 
         #y = self.ln_2(x)
-        #y = self.mask_tokens(y)
         #y = self.mlp(y)
-
-        x = self.ln_1(input)
-        x = self.mask_tokens(x)
-        x = self.self_attention(x) + input
-        x = self.mlp(self.mask_tokens(self.ln_2(x))) + x
-
-
-        return x# + y
-    
-
-    def set_budget(self, budget: float):
-        self.current_budget = budget
-        
-    
+        return x
     
 #ARPE: Absolute Relative Position Encoding
 class ARPE(nn.Module):
@@ -180,8 +123,8 @@ class ARPE(nn.Module):
 
         return x # B, N, out_channels
 
-# PCT Encoder
-class PCTEncoder(nn.Module):
+# AdaPT Encoder
+class AdaPTEncoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
     def __init__(
@@ -192,12 +135,17 @@ class PCTEncoder(nn.Module):
             mlp_dim: int,
             dropout: float,
             attention_dropout: float,
+            drop_layers: List[int] = None,
+            num_class_tokens: int = 1,
     ):
         super().__init__()          
         self.dropout = nn.Dropout(dropout)
+        self.num_layers = num_layers
+        self.num_class_tokens = num_class_tokens
+        self.gs = GumbelSoftmax(dim=-1, hard=True)
         self.layers = nn.ModuleList(
             [
-                RankingPCTBlock(
+                AdaPTBlock(
                     num_heads=num_heads,
                     hidden_dim=hidden_dim,
                     mlp_dim=mlp_dim,
@@ -207,13 +155,53 @@ class PCTEncoder(nn.Module):
                 for _ in range(num_layers)
             ]
         )
+        if drop_layers is not None:
+            self.drop_layers = drop_layers
+            self.drop_predictors = nn.ModuleList([DropPredictor(hidden_dim) for _ in range(len(drop_layers))])
+
+    def get_decisions(self, input:torch.Tensor, prev_decision:torch.Tensor, p:int):
+
+        if self.num_class_tokens > 0:
+            # Separate class tokens
+            class_tokens = input[:, 0:self.num_class_tokens]
+            x = input[:, self.num_class_tokens:]    
+        
+        # Get decisions from drop predictors
+        decisions = self.drop_predictors[p](x, prev_decision)
+
+        return decisions
+
+    def _build_mask(self, decisions: torch.Tensor):
+        
+        mask = (decisions*decisions.transpose(1,2) + torch.eye(decisions.shape[2],device=self.device)).bool()
+        return mask
+
 
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        input = self.dropout(input)
-        for layer in self.layers:
-            input = layer(input)
-        return input
+        x = self.dropout(input)
+        B, N, C = x.shape
+
+        prev_decision = torch.ones(B, N-1, 1, dtype=x.dtype, device=x.device)
+        p = 0
+
+        for i, layer in enumerate(self.layers):
+            if i in self.drop_layers:
+
+                # Get predictions from drop predictor
+                soft_decision = self.get_decisions(x, prev_decision, p)
+                p += 1
+
+                # Apply Gumbel-Softmax
+                decision = self.gs(soft_decision)[:,:,1:2]
+                
+                # Update previous decisions
+                decision = decision*prev_decision
+                prev_decision = decision
+                
+
+
+            x = layer(x)
 
 # Classification Head    
 class Classf_head(nn.Module):
@@ -234,7 +222,7 @@ class Classf_head(nn.Module):
         return x
 
 
-class RankPointCloudTransformer(nn.Module):
+class PointCloudTransformer(nn.Module):
 
     def __init__(
             self,
@@ -266,7 +254,7 @@ class RankPointCloudTransformer(nn.Module):
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
         
         # Add class tokens
-        if num_class_tokens > 0:
+        if num_class_tokens > 0:    
             self.class_tokens = nn.Parameter(torch.zeros(1, num_class_tokens, hidden_dim))
 
         # Add registers
@@ -274,7 +262,7 @@ class RankPointCloudTransformer(nn.Module):
             self.registers = nn.Parameter(torch.zeros(1, num_registers, hidden_dim))
         
         # PCT Encoder
-        self.encoder = PCTEncoder(
+        self.encoder = AdaPTEncoder(
             num_layers=num_layers,
             num_heads=num_heads,
             hidden_dim=hidden_dim,
@@ -328,27 +316,3 @@ class RankPointCloudTransformer(nn.Module):
         x = self.head(x)
 
         return x
-
-    def enable_ranking(self, sort_tokens: Union[bool, List[bool]] = False):
-        """
-        Enable ranking for the RankVit model.
-
-        Args:
-            sort_tokens (Union[bool, List[bool]], optional): 
-                A boolean value or a list of boolean values indicating whether to sort tokens for each RankVit block. 
-                If a single boolean value is provided, it will be applied to all RankVit blocks. 
-                If a list of boolean values is provided, each value will be applied to the corresponding RankVit block. 
-                Defaults to False.
-        """
-        if isinstance(sort_tokens, bool):
-            sort_tokens = [sort_tokens] * len(self.encoder.layers)
-
-        for rankvitblock, sort in zip(self.encoder.layers, sort_tokens):
-            rankvitblock.sort = sort
-    
-
-    def set_budget(self, budget: float):
-        self.current_budget = budget
-        for rankvitblock in self.encoder.layers:
-            if hasattr(rankvitblock, 'set_budget'):
-                rankvitblock.set_budget(budget)
