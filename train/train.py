@@ -15,7 +15,7 @@ from torch.utils.data import Subset
 
 
 
-from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, make_experiment_directory
+from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, make_experiment_directory,resize_vit_model
 from peekvit.models.topology import reinit_class_tokens, train_only_these_params
 from peekvit.utils.losses import LossCompose
 from peekvit.utils.visualize import plot_masked_images
@@ -65,6 +65,9 @@ def train(cfg: DictConfig):
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
     
+    #resize the model here if needed
+    model = resize_vit_model(model,[3,4,5,6])
+    print(model)
 
 
     # main loss 

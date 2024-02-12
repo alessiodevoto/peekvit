@@ -11,7 +11,7 @@
 #         ├── logs.txt
 #
 
-workspace: '<your_workspace>'
+workspace: '/home/giordano/Documenti/Piagnina/peekvit'
 experiments_dir: '${workspace}/runs'
 experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 

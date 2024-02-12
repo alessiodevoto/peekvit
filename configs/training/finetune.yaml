@@ -1,5 +1,5 @@
-train_batch_size: 128
-eval_batch_size: 128
+train_batch_size: 32
+eval_batch_size: 32
 clip_grad_norm: 1.0
 num_epochs: 100
 eval_every: 10                    # -1 for no evaluation

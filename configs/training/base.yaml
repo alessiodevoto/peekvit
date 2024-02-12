@@ -1,4 +1,4 @@
-train_batch_size: 64
+train_batch_size: 32
 eval_batch_size: 32
 lr: 1e-3
 weight_decay: 1e-4
@@ -10,6 +10,6 @@ plot_masks_every: -1              # -1 for no plotting
 num_images_to_plot: 10  
 reinit_class_tokens: False        # reinitialize class tokens before training
 train_backbone: True              # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
-num_workers: 28
+num_workers: 16
 train_budget: 0.9
 val_budgets: [0.2, 0.8]                 # budgets to use during validation

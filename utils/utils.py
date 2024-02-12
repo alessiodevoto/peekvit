@@ -269,4 +269,31 @@ def get_checkpoint_path(experiment_dir, epoch='last'):
         checkpoint = f'epoch_{epoch:03}.pth'
     return join(checkpoints_dir, checkpoint)
     
+def resize_vit_model(model, blocks_to_remove):
+    """
+    Resize a ViT model by removing certain blocks
+
+    Parameters:
+       model(struct): The ViT to be resized
+       remove_blocks(list): list of indices regarding specific blocks to be removed
+
+    Returns:
+       model(struct): Resized ViT
+    """
+
+    #remove specified blocks
+    blocks_to_remove.sort(reverse=True)
+    for i in blocks_to_remove:
+        del model.encoder.layers[i]
+
+    #adjust the model's weights (model's state dictionary)
+    adjusted_state_dictionary={}
+    for name, param in model.state_dict().items():
+        #we check if the current name does not belong to any of the removed blocks
+        if not any(f"layers.{i}" in name for i in blocks_to_remove):
+            adjusted_state_dictionary[name]=param
+
+    model.load_state_dict(adjusted_state_dictionary, strict=False)
+
+    return model
 
