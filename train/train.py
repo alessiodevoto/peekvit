@@ -36,12 +36,10 @@ def train(cfg: DictConfig):
     experiment_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
     
-    
     # logger
     config_dict = OmegaConf.to_container(cfg, resolve=True)
     pprint(config_dict)
     logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
-    
 
     # dataset and dataloader
     training_args = cfg.training

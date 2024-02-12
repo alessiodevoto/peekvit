@@ -61,6 +61,7 @@ class AdaPTBlock(nn.Module):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
+        self.drop_target = 0.0
 
 
         # Attention block
@@ -71,6 +72,9 @@ class AdaPTBlock(nn.Module):
         # MLP block
         self.ln_2 = nn.LayerNorm(hidden_dim)
         self.mlp = MLP(hidden_dim=hidden_dim, mlp_dim=mlp_dim)
+
+    def set_target(self, target):
+        self.drop_target = target
         
     def forward(self, input: torch.Tensor, mask: Optional[torch.Tensor] = None):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
@@ -136,6 +140,7 @@ class AdaPTEncoder(nn.Module):
             dropout: float,
             attention_dropout: float,
             drop_layers: List[int] = None,
+            drop_target: List[float] = None,
             num_class_tokens: int = 1,
     ):
         super().__init__()          
@@ -155,8 +160,16 @@ class AdaPTEncoder(nn.Module):
                 for _ in range(num_layers)
             ]
         )
+        if drop_target is not None:
+            if len(drop_target) != len(drop_layers):
+                raise ValueError("drop_target and drop_layers must have the same length")
+            if len(drop_target) == 1:
+                drop_target = 1 - torch.pow(drop_target, torch.arange(1, num_layers+1))
         if drop_layers is not None:
             self.drop_layers = drop_layers
+            for i, l in enumerate(drop_layers):
+                self.layers[l].set_target(drop_target[i])
+
             self.drop_predictors = nn.ModuleList([DropPredictor(hidden_dim) for _ in range(len(drop_layers))])
 
     def get_decisions(self, input:torch.Tensor, prev_decision:torch.Tensor, p:int):
@@ -176,12 +189,30 @@ class AdaPTEncoder(nn.Module):
         mask = (decisions*decisions.transpose(1,2) + torch.eye(decisions.shape[2],device=self.device)).bool()
         return mask
 
+    def batch_index_select(x, idx):
+        if len(x.size()) == 3:
+            B, N, C = x.size()
+            N_new = idx.size(1)
+            offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
+            idx = idx + offset
+            out = x.reshape(B*N, C)[idx.reshape(-1)].reshape(B, N_new, C)
+            return out
+        elif len(x.size()) == 2:
+            B, N = x.size()
+            N_new = idx.size(1)
+            offset = torch.arange(B, dtype=torch.long, device=x.device).view(B, 1) * N
+            idx = idx + offset
+            out = x.reshape(B*N)[idx.reshape(-1)].reshape(B, N_new)
+            return out
+        else:
+            raise NotImplementedError
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         x = self.dropout(input)
         B, N, C = x.shape
 
+        mask = None
         prev_decision = torch.ones(B, N-1, 1, dtype=x.dtype, device=x.device)
         p = 0
 
@@ -191,6 +222,10 @@ class AdaPTEncoder(nn.Module):
                 # Get predictions from drop predictor
                 soft_decision = self.get_decisions(x, prev_decision, p)
                 p += 1
+                
+                # Slow warmup TODO
+                #keepall = torch.cat((torch.zeros_like(pred_score[:,:,0:1]), torch.ones_like(pred_score[:,:,1:2])),2) 
+                #pred_score = pred_score*drop_temp + keepall*(1-drop_temp)
 
                 # Apply Gumbel-Softmax
                 decision = self.gs(soft_decision)[:,:,1:2]
@@ -199,9 +234,18 @@ class AdaPTEncoder(nn.Module):
                 decision = decision*prev_decision
                 prev_decision = decision
                 
+                if self.training:
+                    #update mask for tokens in training
+                    mask = self._build_mask(decisions=decision)
+                else:
+                    #sample tokens at inference time
+                    num_keep_tokens = int((1-layer.drop_target) * (N))
+                    keep_policy = torch.argsort(soft_decision[:,:,1], dim=1, descending=True)[:, :num_keep_tokens]
+                    x = self.batch_index_select(x, keep_policy)
+                    #print(drop_target[p],num_keep_tokens, x.shape)
+                    prev_decision = self.batch_index_select(prev_decision, keep_policy)
 
-
-            x = layer(x)
+            x = layer(x, mask)
 
 # Classification Head    
 class Classf_head(nn.Module):
@@ -222,7 +266,7 @@ class Classf_head(nn.Module):
         return x
 
 
-class PointCloudTransformer(nn.Module):
+class AdaptivePointCloudTransformer(nn.Module):
 
     def __init__(
             self,
@@ -238,6 +282,8 @@ class PointCloudTransformer(nn.Module):
             num_registers: int = 0,
             num_class_tokens: int = 1,
             torch_pretrained_weights: Optional[str] = None,
+            drop_layers: Optional[List[int]] = None,
+            drop_target: Optional[List[float]] = None,
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
@@ -249,6 +295,10 @@ class PointCloudTransformer(nn.Module):
         self.num_heads = num_heads
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
+        self.num_layers = num_layers
+        self.num_points = num_points
+        self.drop_layers = drop_layers
+        self.drop_target = drop_target
 
         # Embedder
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
@@ -269,6 +319,8 @@ class PointCloudTransformer(nn.Module):
             mlp_dim=mlp_dim,
             dropout=dropout,
             attention_dropout=attention_dropout,
+            drop_layers=drop_layers,
+            drop_target=drop_target,
         )
 
         # Classification Head
