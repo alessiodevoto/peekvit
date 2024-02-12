@@ -1,3 +1,4 @@
+from random import random
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -49,7 +50,7 @@ class ResidualGate(nn.Module):
         assert budget is None or threshold is None, 'Cannot specify both budget and threshold'
 
         # compute the mask by first projecting each token into a scalar and then applying the gate
-        mask_log = self.projection(x) / self.temp
+        mask_log = self.projection(x) 
         mask = self.gate(mask_log)
         
         
@@ -201,8 +202,12 @@ class ResidualViTBlock(ResidualModule):
         current_budget, threshold = None, None
         if self.budget_token:
             # if we are using a budget token in input, it is the last token
+            # if self.budget_token == 'learnable':
             budget_token = img_tokens[:, -1:, :] 
             img_tokens = img_tokens[:, :-1, :]
+            """elif self.budget_token == 'learnable_interpolate':
+                budget_token = img_tokens[:, -2:, :]
+                img_tokens = img_tokens[:, :-2, :]"""
             current_budget = budget_token.mean()
         
         if self.budget_token == 'learnable':
@@ -370,12 +375,14 @@ class ResidualVisionTransformer(nn.Module):
         gate_threshold (float, optional): The threshold for the gate. Defaults to 0.5.
         add_budget_token (bool, str, optional): Whether to add a budget token at the end of each sequence. It can be:
             - False to not add a budget token
-            - True to sample a budget token in [0,1]
-            - a tuple-like to specify a set of budgets to sample from, a float to have a fixed budget 
-            across training, 
+            - True to sample a budget token in `budget_interval`
+            - a tuple-like to specify a set of budgets to sample from, 
+            - a float to have a fixed budget across training 
             - 'learnable' to add a learnable budget token and sample a value between 0 and 1 to multiply to it
             - learnable interpolate to have 2 trainable budget tokens and sample a value (budget) to interpolate between them.  
             For now, the same budget is sampled for each batch. Defaults to False.
+        budget_interval (Tuple): the min and max value for the budget. Defaults to (0, 1)
+
     """
 
     def __init__(
@@ -398,8 +405,8 @@ class ResidualVisionTransformer(nn.Module):
         gate_temp: float = 1.0,
         gate_bias: float = 10.0,
         gate_threshold: float = 0.5,
-        sample_budget: Union[bool, List] = False,
         add_budget_token: Union[bool, List, Literal['learnable', 'learnable_interpolate']] = False,
+        budget_interval: Optional[List] = (0,1)
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -413,11 +420,11 @@ class ResidualVisionTransformer(nn.Module):
         self.representation_size = representation_size
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
-        self.budget = add_budget_token
-        self.sample_budget = sample_budget
+        self.add_budget_token = add_budget_token
         self.current_budget = None
         self.gate_temp = gate_temp 
         self.gate_bias = gate_bias
+        self.budget_interval = budget_interval
         
         # assume all layers are residual by default
         self.residual_layers = residual_layers or ['attention+mlp'] * num_layers
@@ -457,14 +464,21 @@ class ResidualVisionTransformer(nn.Module):
     
         self.seq_length = seq_length
 
-        if self.budget:
+        if self.add_budget_token:
+            # base case where we add a homogeneous token of floats
             seq_length += 1
             self.num_budget_tokens = 1
-        
-        if self.budget == 'learnable' or self.budget == 'learnable_interpolate':
-            self.learnable_budget_token_1 = nn.Parameter(torch.randn(1, 1, hidden_dim))
-            # actually we need two learnable parameters for the non interpolate case
-            self.learnable_budget_token_2 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+
+            # we add a sampled budget token
+            if self.add_budget_token == 'learnable':
+                self.learnable_budget_token_1 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+            
+            # we add 2 sampled budget tokens
+            if self.add_budget_token == 'learnable_interpolate':
+                self.learnable_budget_token_1 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+                self.learnable_budget_token_2 = nn.Parameter(torch.randn(1, 1, hidden_dim))
+                seq_length += 1
+                self.num_budget_tokens = 2
             
             
 
@@ -502,91 +516,48 @@ class ResidualVisionTransformer(nn.Module):
         return x
     
     def _sample_budget(self):
-        if isinstance(self.budget, float):
-            # fixed budget
-            sampled_budget = self.budget
-        elif isinstance(self.budget, list) or isinstance(self.budget, tuple):
-            # select a random value from the possible budgets
-            idx = torch.randint(0, len(self.budget), (1,)).item()
-            sampled_budget = self.budget[idx]
-        elif self.budget == True:
-            # sample a random budget in [0,1)
-            sampled_budget = torch.rand(1).item()
-        return sampled_budget
-
+        """
+        Sample a budget, i.e. a float between 0 and 1, based on the self.add_budget_token parameter.
+        """
+        if isinstance(self.add_budget_token, (list, tuple)):
+            return torch.tensor(random.choice(self.add_budget_token))
+        elif isinstance(self.add_budget_token, float):
+            return torch.tensor(self.add_budget_token)
+        else:
+            return torch.rand(1) * (self.budget_interval[1] - self.budget_interval[0]) + self.budget_interval[0]
 
     def _add_budget_token(self, x):
-            """
-            Adds a budget token to the input tensor based on the self.budget. 
-            After calling this method, self.current_budget will contain the value of the current budget.
+        """
+        Adds a budget token to the input tensor based on the self.budget. 
+        After calling this method, self.current_budget will contain the value of the current budget.
 
-            Args:
-                x (torch.Tensor): Input tensor of shape (batch_size, seq_len, hidden_dim).
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, hidden_dim).
 
-            Returns:
-                torch.Tensor: Tensor with the budget token added, of shape (batch_size, seq_len+1, hidden_dim).
-            
-            """
-            
-            n = x.shape[0]
-            budget_token = torch.empty((n, 1, self.hidden_dim), device=x.device)
-            
-            if self.training:
-                # for now the token is the same for all the batch
-                if isinstance(self.budget, float):
-                    # fixed budget
-                    self.current_budget = self.budget
-                elif isinstance(self.budget, list) or isinstance(self.budget, tuple):
-                    # select a random value from the possible budgets
-                    idx = torch.randint(0, len(self.budget), (1,)).item()
-                    self.current_budget = self.budget[idx]
-                elif self.budget == True:
-                    # sample a random budget in [0,1)
-                    self.current_budget = torch.rand(1, device=x.device).item()
-                elif self.budget == 'learnable':
-                    # in this case we use a single learnable parameter and multiply it by a random budget
-                    self.current_budget = torch.rand(1, device=x.device).item()
-                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
-                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
-                    return x
-                elif self.budget == 'learnable_interpolate':
-                    # in this case we use two learnable parameters and interpolate between them with a random budget
-                    self.current_budget = torch.rand(1, device=x.device).item()
-                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
-                    batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    x = torch.cat([ x,
-                                    self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
-                    return x
-                    
-                
-                budget_token = budget_token.fill_(self.current_budget)
-                self.current_budget = budget_token.mean().item()
-                x = torch.cat([x, budget_token], dim=1)
-                return x
-            
-            else:
-                assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
+        Returns:
+            torch.Tensor: Tensor with the budget token added, of shape (batch_size, seq_len+1, hidden_dim).
+        """
+        n = x.shape[0]
+        if self.training:
+            sampled_budget = self._sample_budget()
+            self.current_budget = sampled_budget.to(x.device)
+        else:
+            assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
 
-                
-                if self.budget == 'learnable':
-                    # in this case we use two learnable parameters and interpolate between them with a random budget
-                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
-                    x = torch.cat([x, self.current_budget * batch_budget_token_1], dim=1)
-                    
-                elif self.budget == 'learnable_interpolate':
-                    # in this case we use two learnable parameters and interpolate between them with a random budget
-                    batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
-                    batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1)
-                    x = torch.cat([ x,
-                                    self.current_budget * batch_budget_token_1 +
-                                    (1-self.current_budget) * batch_budget_token_2], dim=1)
-                    
-                else:
-                    budget_token = budget_token.fill_(self.current_budget)
-                    self.current_budget = budget_token.mean().item()
-                    x = torch.cat([x, budget_token], dim=1)
-            return x
+        
+
+        if self.add_budget_token == 'learnable':
+            batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) * self.current_budget
+            x = torch.cat([x, batch_budget_token_1], dim=1)
+        elif self.add_budget_token == 'learnable_interpolate':
+            batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) * self.current_budget
+            batch_budget_token_2 = self.learnable_budget_token_2.expand(n, -1, -1) * (1-self.current_budget)
+            x = torch.cat([ x, batch_budget_token_1 + batch_budget_token_2], dim=1)
+        else:
+            budget_token = torch.empty((n, 1, self.hidden_dim), device=x.device).fill_(self.current_budget)
+            x = torch.cat([x, budget_token], dim=1)
+        
+        return x
 
     def forward(self, x: torch.Tensor):
         # Reshape and permute the input tensor
@@ -603,7 +574,7 @@ class ResidualVisionTransformer(nn.Module):
         x = torch.cat([batch_class_tokens, x], dim=1)
 
         # Add budget token
-        if self.budget:
+        if self.add_budget_token:
             x = self._add_budget_token(x)
         
         # Pass through the encoder
