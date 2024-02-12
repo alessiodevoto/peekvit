@@ -69,11 +69,10 @@ In all the following scripts we pass the settings via CLI instead of editing the
 #### TODOS
 - Detailed comments for losses
 - Examples on comparative plots
-- Fix autoenc loss for masking 
 - Class token plot example
 - Add a script for each howto
 - default cumulative noise plot when testing noise
-- fix enc dec as now computes loss for all tokens
-- config file for each model
+- fix enc dec as now computes loss for all tokens. Actually this was right.
 - change cuda float
-- change noise in config
+- change noise in config to 'if noise in config'
+

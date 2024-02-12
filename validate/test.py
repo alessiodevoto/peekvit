@@ -25,7 +25,7 @@ from peekvit.utils.flops_count import compute_flops
 
 
 def move_dataset_to_device(dataloder, device):
-    print('Moving dataset to device for testing infernce speed: ', device)
+    print(f'Moving dataset to device {device} for testing infernce speed')
     for batch, labels in dataloder:
         batch.to(device), labels.to(device)
 
@@ -152,7 +152,7 @@ def validate(
                 timings_per_budget[budget] = images_per_second
                 timings_per_flops[flops] = images_per_second
 
-    logger.log({'flops': results_per_flops, 'budget': results_per_budget})
+    logger.log({'flops': results_per_flops, 'budget': results_per_budget, 'timings_flops': timings_per_flops, 'timings_budget': timings_per_budget})
     # print('Results per budget: ', results_per_budget)
     # print('Results per flops: ', results_per_flops)
     return results_per_budget, results_per_flops, timings_per_budget, timings_per_flops
@@ -198,7 +198,7 @@ def test(cfg: DictConfig):
     # if a model is provided in the config file, load it
     model = None
     if 'model' in cfg:
-        print('Instantiating new model from config file.')
+        print('Instantiating model from config file.')
         model = instantiate(cfg.model)
         model = model.to(device)
 
