@@ -1,0 +1,10 @@
+_target_: peekvit.models.pct.AdaptivePointCloudTransformer
+num_points: ${dataset.num_points}
+num_classes: ${dataset.num_classes}
+hidden_dim: 128
+mlp_dim: 256
+num_layers: 4
+num_heads: 4
+num_class_tokens: 1
+drop_layers: [0, 1, 2, 3]
+drop_target: [0.2, 0.4, 0.6, 0.8]
