@@ -106,7 +106,7 @@ def get_forward_masks(model, incremental=False):
     masks = {}
     previous_mask = torch.tensor(1.0)
     for module_name, module in model.named_modules():
-        if isinstance(module, ResidualModule) and module.skip not in {None, 'none'}:
+        if isinstance(module, ResidualModule) and getattr(module, 'skip', None) not in {None, 'none'}:
             if not incremental:
                 masks[module_name] = module.mask  # (batch_size, sequence_len, 1)
             else:

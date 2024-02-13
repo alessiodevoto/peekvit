@@ -7,7 +7,7 @@ from abc import ABC
 from pytorch3d.ops import knn_points
 from einops.layers.torch import Reduce
 
-
+from .residualvit import ResidualModule
 
 from .blocks import SelfAttention, MLP, GumbelSoftmax
  
@@ -46,7 +46,7 @@ class DropPredictor(nn.Module):
         return self.out_conv(x)
 
 # PCT Block
-class AdaPTBlock(nn.Module):
+class AdaPTBlock(ResidualModule):
     """Transformer encoder block."""
 
     def __init__(
@@ -62,7 +62,8 @@ class AdaPTBlock(nn.Module):
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
         self.drop_target = 0.0
-
+        self.mask = None
+        self.skip = 'temp'
 
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
@@ -76,11 +77,16 @@ class AdaPTBlock(nn.Module):
     def set_target(self, target):
         self.drop_target = target
         
-    def forward(self, input: torch.Tensor, mask: Optional[torch.Tensor] = None):
+    def forward(self, input: torch.Tensor, mask: Optional[torch.Tensor] = None, decision: Optional[torch.Tensor] = None) -> torch.Tensor:
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
         x = self.ln_1(input)
         if mask is not None:
+            # sorry for the name confusion. mask is of shape (B, N, N), and decision is of shape (B, N, 1), self.mask name is used in the losses
+            self.mask = decision
+
+            # repeat mask for all heads
+            mask = mask.repeat(self.self_attention.num_heads,1,1)
             mask = torch.logical_not(mask)
             x = self.self_attention(x, mask)
         else:
@@ -161,10 +167,7 @@ class AdaPTEncoder(nn.Module):
             ]
         )
         if drop_target is not None:
-            if len(drop_target) != len(drop_layers):
-                raise ValueError("drop_target and drop_layers must have the same length")
-            if len(drop_target) == 1:
-                drop_target = 1 - torch.pow(drop_target, torch.arange(1, num_layers+1))
+            drop_target = 1 - torch.pow(drop_target, torch.arange(1, num_layers+1))
         if drop_layers is not None:
             self.drop_layers = drop_layers
             for i, l in enumerate(drop_layers):
@@ -172,24 +175,25 @@ class AdaPTEncoder(nn.Module):
 
             self.drop_predictors = nn.ModuleList([DropPredictor(hidden_dim) for _ in range(len(drop_layers))])
 
+        self.warmup = 0
+
     def get_decisions(self, input:torch.Tensor, prev_decision:torch.Tensor, p:int):
 
-        if self.num_class_tokens > 0:
-            # Separate class tokens
-            class_tokens = input[:, 0:self.num_class_tokens]
-            x = input[:, self.num_class_tokens:]    
-        
         # Get decisions from drop predictors
-        decisions = self.drop_predictors[p](x, prev_decision)
+        decisions = self.drop_predictors[p](input, prev_decision)
 
         return decisions
 
     def _build_mask(self, decisions: torch.Tensor):
         
-        mask = (decisions*decisions.transpose(1,2) + torch.eye(decisions.shape[2],device=self.device)).bool()
+        # always use class tokens
+        decisions = torch.cat((torch.ones_like(decisions[:,0:1,0:1]), decisions),1)
+
+        # build mask from decisions
+        mask = (decisions*decisions.transpose(1,2) + torch.eye(decisions.shape[2],device=decisions.device)).bool()
         return mask
 
-    def batch_index_select(x, idx):
+    def batch_index_select(self, x, idx):
         if len(x.size()) == 3:
             B, N, C = x.size()
             N_new = idx.size(1)
@@ -219,14 +223,19 @@ class AdaPTEncoder(nn.Module):
         for i, layer in enumerate(self.layers):
             if i in self.drop_layers:
 
+                # Detach class tokens
+                if self.num_class_tokens > 0:
+                    class_tokens = x[:, 0:self.num_class_tokens]
+                    x = x[:, self.num_class_tokens:]
+
                 # Get predictions from drop predictor
                 soft_decision = self.get_decisions(x, prev_decision, p)
                 p += 1
                 
                 # Slow warmup TODO
-                #keepall = torch.cat((torch.zeros_like(pred_score[:,:,0:1]), torch.ones_like(pred_score[:,:,1:2])),2) 
-                #pred_score = pred_score*drop_temp + keepall*(1-drop_temp)
-
+                keepall = torch.cat((torch.zeros_like(soft_decision[:,:,0:1]), torch.ones_like(soft_decision[:,:,1:2])),2) 
+                soft_decision = soft_decision*self.warmup + keepall*(1-self.warmup)
+                
                 # Apply Gumbel-Softmax
                 decision = self.gs(soft_decision)[:,:,1:2]
                 
@@ -245,7 +254,13 @@ class AdaPTEncoder(nn.Module):
                     #print(drop_target[p],num_keep_tokens, x.shape)
                     prev_decision = self.batch_index_select(prev_decision, keep_policy)
 
-            x = layer(x, mask)
+                # reattach class tokens
+                if self.num_class_tokens > 0:
+                    x = torch.cat([class_tokens, x], dim=1)
+
+            x = layer(x, mask, decision)
+        return x    
+            
 
 # Classification Head    
 class Classf_head(nn.Module):
@@ -283,7 +298,9 @@ class AdaptivePointCloudTransformer(nn.Module):
             num_class_tokens: int = 1,
             torch_pretrained_weights: Optional[str] = None,
             drop_layers: Optional[List[int]] = None,
-            drop_target: Optional[List[float]] = None,
+            drop_target: Optional[float] = None,
+            warmup_start: int = 0,
+            warmup_steps: int = 50,
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
@@ -299,6 +316,9 @@ class AdaptivePointCloudTransformer(nn.Module):
         self.num_points = num_points
         self.drop_layers = drop_layers
         self.drop_target = drop_target
+        self.current_budget = drop_target
+        self.warmup_start = warmup_start
+        self.warmup_steps = warmup_steps
 
         # Embedder
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
@@ -368,3 +388,6 @@ class AdaptivePointCloudTransformer(nn.Module):
         x = self.head(x)
 
         return x
+    
+    def set_budget(self, budget: float):
+        self.current_budget = budget

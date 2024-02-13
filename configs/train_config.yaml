@@ -28,11 +28,11 @@ hydra:
 defaults:
   - logger: wandb
   - dataset: modelnet40
-  - model: pct
+  - model: adapt
   - training: base
   - optimizer: adam
   - scheduler: null
-  - loss: crossentropy
+  - loss: crossentropy_mse
   - noise: no_noise 
   - _self_
 
