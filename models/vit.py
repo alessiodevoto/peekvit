@@ -97,6 +97,49 @@ class ViTEncoder(nn.Module):
 
 class VisionTransformer(nn.Module):
     """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
+    
+    def __init__(
+        self,
+        image_size: int,
+        patch_size: int,
+        num_layers: int,
+        num_heads: int,
+        hidden_dim: int,
+        mlp_dim: int,
+        dropout: float = 0.0,
+        attention_dropout: float = 0.0,
+        num_classes: int = 1000,
+        representation_size: Optional[int] = None,
+        num_registers: int = 0,
+        num_class_tokens: int = 1,
+        torch_pretrained_weights: Optional[str] = None,
+        timm_pretrained_weights: Optional[str] = None,
+    ):
+        """
+        Args:
+            image_size (int): The size of the input image.
+            patch_size (int): The size of each patch in the image.
+            num_layers (int): The number of layers in the transformer encoder.
+            num_heads (int): The number of attention heads in the transformer encoder.
+            hidden_dim (int): The hidden dimension size in the transformer encoder.
+            mlp_dim (int): The dimension size of the feed-forward network in the transformer encoder.
+            dropout (float, optional): The dropout rate. Defaults to 0.0.
+            attention_dropout (float, optional): The dropout rate for attention weights. Defaults to 0.0.
+            num_classes (int, optional): The number of output classes. Defaults to 1000.
+            representation_size (int, optional): The size of the output representation. Defaults to None.
+            num_registers (int, optional): The number of register tokens to be added. Defaults to 0.
+            num_class_tokens (int, optional): The number of class tokens to be added. Defaults to 1.
+            torch_pretrained_weights (str, optional): The path to the pretrained weights in the Torch format. Defaults to None
+                Example: 'ViT_B_16_Weights[IMAGENET1K_V1]'.
+                See options at https://github.com/pytorch/vision/blob/a52607ece94aedbe41107617ace22a8da91efc25/torchvision/models/vision_transformer.py#L351
+            timm_pretrained_weights (List, optional): The path to the pretrained weights in the Timm format. Defaults to None. 
+                Example: ['facebookresearch/deit_base_patch16_224', 'deit_base_patch16_224']
+        """
+        super().__init__()
+        # Rest of the code...
+class VisionTransformer(nn.Module):
+    """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
+
 
     def __init__(
         self,
@@ -113,7 +156,9 @@ class VisionTransformer(nn.Module):
         num_registers: int = 0,
         num_class_tokens: int = 1,
         torch_pretrained_weights: Optional[str] = None,
+        timm_pretrained_weights: Optional[List] = None,
     ):
+        
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
         self.image_size = image_size
@@ -168,11 +213,20 @@ class VisionTransformer(nn.Module):
         
 
         if torch_pretrained_weights is not None:
-            print('Loading pretrained weights: ', torch_pretrained_weights)
+            print('Loading torch pretrained weights: ', torch_pretrained_weights)
             from .adapters import adapt_torch_state_dict
             torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict(progress=False)
             adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
             self.load_state_dict(adapted_state_dict, strict=False)
+        elif timm_pretrained_weights is not None:
+            print('Loading timm pretrained weights: ', timm_pretrained_weights)
+            from .adapters import adapt_timm_state_dict
+            model = torch.hub.load(timm_pretrained_weights[0], timm_pretrained_weights[1], pretrained=True)
+            timm_pretrained_weights = model.state_dict()
+            adapted_state_dict = adapt_timm_state_dict(timm_pretrained_weights, num_classes=num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
+            del model
+
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:

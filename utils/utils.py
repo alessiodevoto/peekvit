@@ -202,7 +202,9 @@ def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optim
         'optimizer': optimizer.state_dict() if not skip_optimizer else None,
         'epoch': epoch
     }
-    torch.save(state, f'{path}/epoch_{epoch:03}.pth')
+    checkpoint_path = join(path, f'epoch_{epoch:03}.pth')
+    print(f'Saving training state for epoch {epoch}.')
+    torch.save(state, checkpoint_path)
 
 
 def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=False):

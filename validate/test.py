@@ -216,6 +216,11 @@ def test(cfg: DictConfig):
         model_checkpoint_path = get_checkpoint_path(experiment_dir)
         if model_checkpoint_path is not None:
             print('Loading model from checkpoint: ', model_checkpoint_path)
+        else:
+            print('No model checkpoint found in ', experiment_dir)
+            print('If you are trying to load the model from a local checkpoint, please check the path.')
+            print('If you are loading the model from a config file, ignore this message.')
+            
 
         # validate
         results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops = validate(

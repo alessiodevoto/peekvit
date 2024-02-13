@@ -128,52 +128,6 @@ def adapt_timm_state_dict(timm_state_dict, num_classes:int):
         dict: The adapted state dictionary with updated keys.
     """
 
-    """
-    'blocks.0.attn.proj.bias',
-    'blocks.0.attn.proj.weight',
-    'blocks.0.attn.qkv.bias',
-    'blocks.0.attn.qkv.weight',
-    'blocks.0.mlp.fc1.bias',
-    'blocks.0.mlp.fc1.weight',
-    'blocks.0.mlp.fc2.bias',
-    'blocks.0.mlp.fc2.weight',
-    'blocks.0.norm1.bias',
-    'blocks.0.norm1.weight',
-    'blocks.0.norm2.bias',
-    'blocks.0.norm2.weight',
-
-    'cls_token',
-    'head.bias',
-    'head.weight',
-    'norm.bias',
-    'norm.weight',
-    'patch_embed.proj.bias',
-    'patch_embed.proj.weight',
-    'pos_embed'
-
-    'encoder.layers.0.ln_1.bias',
-    'encoder.layers.0.ln_1.weight',
-    'encoder.layers.0.ln_2.bias',
-    'encoder.layers.0.ln_2.weight',
-    'encoder.layers.0.mlp.fc1.bias',
-    'encoder.layers.0.mlp.fc1.weight',
-    'encoder.layers.0.mlp.fc2.bias',
-    'encoder.layers.0.mlp.fc2.weight',
-    'encoder.layers.0.self_attention.self_attention.in_proj_bias',
-    'encoder.layers.0.self_attention.self_attention.in_proj_weight',
-    'encoder.layers.0.self_attention.self_attention.out_proj.bias',
-    'encoder.layers.0.self_attention.self_attention.out_proj.weight',
-
-    'class_tokens',
-    'conv_proj.bias',
-    'conv_proj.weight',
-    'encoder.ln.bias',
-    'encoder.ln.weight',
-    'encoder.pos_embedding',
-    'head.bias',
-    'head.weight'
-    """
-
     new_state_dict = {}
     def adapt_param_name(p):
 
@@ -242,3 +196,45 @@ torch_params_map = {
     'self_attention.self_attention.out_proj.weight' : 'self_attention.out_proj.weight'
 }
 
+timm_params = {
+    'blocks.0.attn.proj.bias',
+    'blocks.0.attn.proj.weight',
+    'blocks.0.attn.qkv.bias',
+    'blocks.0.attn.qkv.weight',
+    'blocks.0.mlp.fc1.bias',
+    'blocks.0.mlp.fc1.weight',
+    'blocks.0.mlp.fc2.bias',
+    'blocks.0.mlp.fc2.weight',
+    'blocks.0.norm1.bias',
+    'blocks.0.norm1.weight',
+    'blocks.0.norm2.bias',
+    'blocks.0.norm2.weight',
+    'cls_token',
+    'head.bias',
+    'head.weight',
+    'norm.bias',
+    'norm.weight',
+    'patch_embed.proj.bias',
+    'patch_embed.proj.weight',
+    'pos_embed',
+    'encoder.layers.0.ln_1.bias',
+    'encoder.layers.0.ln_1.weight',
+    'encoder.layers.0.ln_2.bias',
+    'encoder.layers.0.ln_2.weight',
+    'encoder.layers.0.mlp.fc1.bias',
+    'encoder.layers.0.mlp.fc1.weight',
+    'encoder.layers.0.mlp.fc2.bias',
+    'encoder.layers.0.mlp.fc2.weight',
+    'encoder.layers.0.self_attention.self_attention.in_proj_bias',
+    'encoder.layers.0.self_attention.self_attention.in_proj_weight',
+    'encoder.layers.0.self_attention.self_attention.out_proj.bias',
+    'encoder.layers.0.self_attention.self_attention.out_proj.weight',
+    'class_tokens',
+    'conv_proj.bias',
+    'conv_proj.weight',
+    'encoder.ln.bias',
+    'encoder.ln.weight',
+    'encoder.pos_embedding',
+    'head.bias',
+    'head.weight'
+    }
