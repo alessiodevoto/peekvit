@@ -120,6 +120,7 @@ def train(cfg: DictConfig):
                 add_loss_dict, add_loss_val = additional_losses.compute(
                     model, 
                     budget=getattr(model, 'current_budget', None),
+                    channel_budget=getattr(model, 'current_channel_budget', None),
                     dict_prefix='train/')
             loss = main_loss + add_loss_val
             loss.backward()
@@ -132,6 +133,11 @@ def train(cfg: DictConfig):
         if scheduler:
             logger.log({'train/lr': scheduler.get_last_lr()[0]})
             scheduler.step()
+
+        if getattr(model, 'warmup', None) is not None:
+            if epoch > model.warmup_start:
+                model.warmup += 1/model.warmup_steps
+
 
     @torch.no_grad()
     def validate_epoch(model, loader, epoch, budget=''):

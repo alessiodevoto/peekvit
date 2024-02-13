@@ -89,6 +89,7 @@ class SelfAttention(nn.Module):
     def __init__(self, input_dim, num_heads, dropout=0.0):
         super().__init__()
         self.self_attention = nn.MultiheadAttention(input_dim, num_heads, batch_first=True, dropout=dropout)
+        self.num_heads = num_heads
 
     def forward(self, x, attn_mask=None, key_padding_mask=None):
         out, weights = self.self_attention(x, x, x, need_weights=True, attn_mask=attn_mask, key_padding_mask=key_padding_mask)
