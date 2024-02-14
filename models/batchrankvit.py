@@ -54,7 +54,7 @@ class BatchRankViTBlock(nn.Module):
     def drop_tokens(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
-        if self.training and not self.drop:
+        if not self.training and not self.drop:
             return input
 
         class_token = input[:, 0:1, :]
@@ -289,7 +289,6 @@ class BatchRankVisionTransformer(nn.Module):
 
     def set_budget(self, budget: float):
         self.current_budget = budget
-        for rankvitblock in self.encoder.layers:
-            if hasattr(rankvitblock, 'set_budget'):
-                rankvitblock.set_budget(budget)
-
+        for batchrankvitblock in self.encoder.layers:
+            if hasattr(batchrankvitblock, 'set_budget'):
+                batchrankvitblock.set_budget(budget)
