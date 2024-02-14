@@ -90,6 +90,15 @@ def train(cfg: DictConfig):
     if 'scheduler' in cfg:
         scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
+    if 'train_budget' in training_args:
+        if not hasattr(model, 'set_budget'):
+            print('[WARNING] Model does not have a budget attribute. Ignoring train_budget...')
+        else:
+            print('Setting budget to ', training_args['train_budget'])
+            model.set_budget(training_args['train_budget'])
+            if hasattr(model, 'enable_ranking'):
+                model.enable_ranking(True)
+
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
         model.train()
@@ -111,6 +120,7 @@ def train(cfg: DictConfig):
                     model.enable_ranking(True)
                 else:
                     model.enable_ranking(False)"""
+
 
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
