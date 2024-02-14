@@ -202,12 +202,8 @@ class ResidualViTBlock(ResidualModule):
         current_budget, threshold = None, None
         if self.budget_token:
             # if we are using a budget token in input, it is the last token
-            # if self.budget_token == 'learnable':
             budget_token = img_tokens[:, -1:, :] 
             img_tokens = img_tokens[:, :-1, :]
-            """elif self.budget_token == 'learnable_interpolate':
-                budget_token = img_tokens[:, -2:, :]
-                img_tokens = img_tokens[:, :-2, :]"""
             current_budget = budget_token.mean()
         
         if self.budget_token == 'learnable':
@@ -230,7 +226,23 @@ class ResidualViTBlock(ResidualModule):
             masked_input = torch.cat([masked_input, budget_token], dim=1)
 
         # plain forward
-        y = self.plain_forward(masked_input)
+        fwd_mask = torch.tensor(1.0)
+        if self.training:
+            # when training, we mask the input to the forward pass
+            fwd_mask = torch.cat([
+                    torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), 
+                    self.mask, 
+                    torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
+        else:
+            # at inference, we simply remove the masked tokens from the input
+            # Check which rows in each matrix are all zeros
+            non_zero_rows_mask = torch.any(masked_input != 0, dim=2)
+            # Check which matrices have at least one non-zero row
+            non_zero_matrices_mask = torch.any(non_zero_rows_mask, dim=1)
+            # Create a new tensor with only matrices containing non-zero rows
+            masked_input = masked_input[non_zero_matrices_mask]
+            
+        y = self.plain_forward(masked_input, mask=fwd_mask)
 
         if self.add_input:
             # only img_tokens should be added to the output
@@ -242,18 +254,16 @@ class ResidualViTBlock(ResidualModule):
     # TODO this is messy, it was a last second change when I found out the layenorm was changing the representation
     # of zero tokens in the input, so I had to add a mask to the layernorm. I should clean this up. 
     # notice that if we don't make sure all masked tokens are actually zero, the flop count will be wrong
-    def plain_forward(self, input: torch.Tensor):
-        if self.skip == 'attention+mlp':
-            expanded_mask = torch.cat([torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), self.mask, torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
-        else:
-            expanded_mask = torch.tensor(1.0, device=input.device)
-        x = expanded_mask * self.ln_1(input) 
+    def plain_forward(self, input: torch.Tensor, mask: Optional[torch.Tensor] = torch.tensor(1.0)):
         
-        x = expanded_mask * self.self_attention(x)
+        mask = mask.to(input.device)
+        x = mask * self.ln_1(input) 
+        
+        x = mask * self.self_attention(x)
         x = self.dropout(x)
         x = x + input
 
-        y = expanded_mask * self.ln_2(x)
+        y = mask * self.ln_2(x)
         y = self.mlp(y)
         return x + y
 

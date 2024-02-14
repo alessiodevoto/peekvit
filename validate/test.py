@@ -25,7 +25,7 @@ from peekvit.utils.flops_count import compute_flops
 
 
 def move_dataset_to_device(dataloder, device):
-    print(f'Moving dataset to device {device} for testing infernce speed')
+    print(f'Moving dataset to device {device} for testing inference speed')
     for batch, labels in dataloder:
         batch.to(device), labels.to(device)
 
@@ -36,6 +36,7 @@ def validate(
         model_checkpoint: str, 
         logger: Any,
         val_loader: DataLoader, 
+        flops_loader: DataLoader,
         budgets: List,
         noise_settings: DictConfig,
         noises: List,
@@ -51,8 +52,6 @@ def validate(
     
     model.eval()
     model.to(device)
-
-    move_dataset_to_device(val_loader, device)
     
 
     # sanity check that model has budget
@@ -89,6 +88,12 @@ def validate(
 
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=model.num_classes).to(device)
 
+    if not flops_loader:
+        print('Flops loader not provided, using val_loader for flops computation')
+        flops_loader = val_loader
+    
+    move_dataset_to_device(flops_loader, device)
+
     
     for budget in budgets:
 
@@ -124,8 +129,8 @@ def validate(
             logger.log({f'test/budget_{budget}/noise_{noise_val}': acc})
             accs.append(acc)
 
-            flops = 0
-            for batch, labels in tqdm(val_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
+            flops = 0            
+            for batch, labels in tqdm(flops_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
                 num_flops, num_params = compute_flops(
                     model, 
@@ -139,8 +144,8 @@ def validate(
             # TODO check that there are no mistakes in the flops computation
             # if the flops are averaged over the batch 
             # check that the expected value is correct
-            flops /= len(val_loader)        
-            
+            flops /= len(flops_loader)        
+
             if noise_val is not None:
                 results_per_budget[budget][noise_val] = acc.item()
                 results_per_flops[flops][noise_val] = acc.item()
@@ -195,6 +200,16 @@ def test(cfg: DictConfig):
         num_workers=cfg.test.num_workers, 
         pin_memory=True)
     
+    flops_loader = None
+    if 'flops_batch_size' in cfg.test and (cfg.test.flops_batch_size != cfg.test.test_batch_size):
+        print('Using a different batch size for flops computation')
+        flops_loader = DataLoader(
+            val_dataset, 
+            batch_size=cfg.test.flops_batch_size, 
+            shuffle=False, 
+            num_workers=cfg.test.num_workers, 
+            pin_memory=True)
+    
     # if a model is provided in the config file, load it
     model = None
     if 'model' in cfg:
@@ -220,13 +235,16 @@ def test(cfg: DictConfig):
             print('No model checkpoint found in ', experiment_dir)
             print('If you are trying to load the model from a local checkpoint, please check the path.')
             print('If you are loading the model from a config file, ignore this message.')
-            
+        
+        if not model_checkpoint_path and not model:
+            raise ValueError('No local checkpoint found and no model provided in the config file.')
 
         # validate
         results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops = validate(
             model_checkpoint_path, 
             logger,
             val_loader, 
+            flops_loader, # TODO add flops loader to function for validation
             budgets=cfg.test.budgets,
             noise_settings=cfg.noise,
             noises=cfg.test.noises,
