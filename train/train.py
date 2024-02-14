@@ -122,6 +122,7 @@ def train(cfg: DictConfig):
                     model.enable_ranking(False)"""
 
 
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
