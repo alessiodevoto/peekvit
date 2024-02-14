@@ -65,12 +65,15 @@ def build_model(model_class, model_args, noise_args=None):
 
     # handle the case where we have a pretrained model not from peekvit
     torch_pretrained_weights = model_args.pop('torch_pretrained_weights', None)
+    timm_pretrained_weights = model_args.pop('timm_pretrained_weights', None)
     
 
     model = MODELS_MAP[model_class](**model_args)
     if torch_pretrained_weights:
         state_dict = adapt_torch_state_dict(torch_pretrained_weights, model_args['num_classes'])
         model.load_state_dict(state_dict, strict=True)
+    if timm_pretrained_weights:
+        raise NotImplementedError('Pretrained weights from timm are not yet supported in this loading function.')
 
     
     # add noise if requested
