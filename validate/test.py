@@ -92,9 +92,6 @@ def validate(
         print('Flops loader not provided, using val_loader for flops computation')
         flops_loader = val_loader
     
-    move_dataset_to_device(flops_loader, device)
-
-    
     for budget in budgets:
 
         results_per_budget[budget] = {}
@@ -129,7 +126,10 @@ def validate(
             logger.log({f'test/budget_{budget}/noise_{noise_val}': acc})
             accs.append(acc)
 
-            flops = 0            
+
+
+            flops = 0    
+            move_dataset_to_device(flops_loader, device)        
             for batch, labels in tqdm(flops_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
                 num_flops, num_params = compute_flops(
@@ -141,10 +141,7 @@ def validate(
                     flops_units='Mac'
                     )
                 flops += num_flops
-            # TODO check that there are no mistakes in the flops computation
-            # if the flops are averaged over the batch 
-            # check that the expected value is correct
-            flops /= len(flops_loader)        
+            flops /= len(flops_loader.dataset)        
 
             if noise_val is not None:
                 results_per_budget[budget][noise_val] = acc.item()
@@ -232,9 +229,7 @@ def test(cfg: DictConfig):
         if model_checkpoint_path is not None:
             print('Loading model from checkpoint: ', model_checkpoint_path)
         else:
-            print('No model checkpoint found in ', experiment_dir)
-            print('If you are trying to load the model from a local checkpoint, please check the path.')
-            print('If you are loading the model from a config file, ignore this message.')
+            print(f'No model checkpoint found in {experiment_dir}. If you are trying to load the model from a local checkpoint, please check the path. If you are loading the model from a config file, ignore this message.')
         
         if not model_checkpoint_path and not model:
             raise ValueError('No local checkpoint found and no model provided in the config file.')
