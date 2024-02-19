@@ -381,6 +381,8 @@ class AViTDPriorLoss(ResidualModelLoss):
         torch.Tensor: The distribution prior loss.
         """
         return avit_distr_prior_loss(model, target_depth=self.target_depth)
+
+
 class LossCompose:
     """
     A class that composes multiple loss functions together.

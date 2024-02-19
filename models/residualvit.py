@@ -227,20 +227,11 @@ class ResidualViTBlock(ResidualModule):
 
         # plain forward
         fwd_mask = torch.tensor(1.0)
-        if self.training:
-            # when training, we mask the input to the forward pass
-            fwd_mask = torch.cat([
+        fwd_mask = torch.cat([
                     torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device), 
                     self.mask, 
-                    torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], dim=1)
-        else:
-            # at inference, we simply remove the masked tokens from the input
-            # Check which rows in each matrix are all zeros
-            non_zero_rows_mask = torch.any(masked_input != 0, dim=2)
-            # Check which matrices have at least one non-zero row
-            non_zero_matrices_mask = torch.any(non_zero_rows_mask, dim=1)
-            # Create a new tensor with only matrices containing non-zero rows
-            masked_input = masked_input[non_zero_matrices_mask]
+                    torch.ones((self.mask.size(0), 1, self.mask.size(2)), device=self.mask.device)], 
+                    dim=1)
             
         y = self.plain_forward(masked_input, mask=fwd_mask)
 
