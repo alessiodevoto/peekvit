@@ -91,11 +91,21 @@ def train(cfg: DictConfig):
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
-        if 'train_budget' in training_args:
-            print('Setting budget to ', training_args['train_budget'])
-            model.set_budget(training_args['train_budget'])
+        """if 'train_budget' in training_args and hasattr(model, 'set_budget'):
+            # train_budget = training_args['train_budget'] 
+            # interpolate budget between 1 and train_budget
+            budget_warmup_epochs = 5 #training_args['budget_warmup_epochs']
+            step_size = (1 - training_args['train_budget'] ) / (training_args['num_epochs'] - budget_warmup_epochs)
+            # train_budget = 1 - step_size * epoch
+            train_budget = 1 - step_size * (epoch - budget_warmup_epochs)
+            train_budget = min(train_budget, 1)
+            print(f'Setting fixed training budget {train_budget:.3f} for epoch {epoch}')
+            model.set_budget(train_budget)
             if hasattr(model, 'enable_ranking'):
-                model.enable_ranking(True)
+                if train_budget < 1.0:
+                    model.enable_ranking(True)
+                else:
+                    model.enable_ranking(False)"""
 
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
@@ -106,7 +116,7 @@ def train(cfg: DictConfig):
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(
                     model, 
-                    budget=model.current_budget,
+                    budget=getattr(model, 'current_budget', None),
                     channel_budget=getattr(model, 'current_channel_budget', None),
                     dict_prefix='train/')
             loss = main_loss + add_loss_val

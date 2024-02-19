@@ -1,0 +1,9 @@
+_target_:  peekvit.models.avit.AdaptiveVisionTransformer
+image_size: 224
+patch_size: 16
+num_layers: 12
+hidden_dim: 384
+mlp_dim: 1536
+num_heads: 6
+num_classes: ${dataset.num_classes}
+timm_pretrained_weights: ['facebookresearch/deit:main', 'deit_small_patch16_224']

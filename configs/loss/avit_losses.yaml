@@ -5,9 +5,10 @@ classification_loss:
 # they can be used for moes or residual models
 # for more info see peekvit/losses.py
 additional_losses:
-    mse:
-        _target_:  peekvit.utils.losses.MSELoss
+    distr_prior_loss:
+        _target_:  peekvit.utils.losses.AViTDPriorLoss
+        target_depth: 7
         weight: 0.1
-        strict: True
-        budget: null
-        skip_layers: []
+    ponder_loss:
+        _target_:  peekvit.utils.losses.AViTPonderLoss
+        weight: 0.0005

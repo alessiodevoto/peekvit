@@ -118,6 +118,48 @@ def solo_mse(model, budget: float = 0.65, strict: bool = False, skip_layers: Lis
     return torch.mean(sparsity_loss)
 
 
+def avit_ponder_loss(model, **kwargs):
+    """
+    Computes the ponder loss of the model.
+
+    Args:
+        model: The model for which to compute the ponder loss.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        torch.Tensor: The ponder loss.
+    """
+    ponder_loss = torch.mean(model.rho_token)
+
+    return ponder_loss
+
+
+def avit_distr_prior_loss(model, target_depth=7, **kwargs):
+    """
+    Computes the distribution prior loss of the model.
+
+    Args:
+        model: The model for which to compute the distribution prior loss.
+        log_distr_target: The target distribution to compare the model's distribution to.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        torch.Tensor: The distribution prior loss.
+    """
+    target_dist = torch.distributions.Normal(loc=target_depth, scale=1.0)
+    target_dist = target_dist.log_prob(torch.arange(model.num_layers) + 1)
+    halting_score_distr = model.halting_score_distr
+    halting_score_distr = halting_score_distr / torch.sum(halting_score_distr)
+    halting_score_distr = torch.clamp(halting_score_distr, 0.001, 0.999)
+    distr_prior_loss = torch.nn.functional.kl_div(halting_score_distr.log(),
+                                                    target_dist.to(halting_score_distr.device).detach(),
+                                                    reduction='batchmean',
+                                                    log_target=True)
+
+    return  distr_prior_loss
+
+
+
 def l1_and_intraentropy(model, budget: float = 0.65,  **kwargs):
 
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
@@ -297,6 +339,48 @@ class AlwaysZeroLoss(ResidualModelLoss):
         return torch.tensor(0.0), torch.tensor(0.0)
 
 
+class AViTPonderLoss(ResidualModelLoss):
+    """
+    Computes the ponder loss of the model.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, model, **kwargs):
+        """
+        Computes the ponder loss of the model.
+
+        Args:
+            model (nn.Module): The model to compute the ponder loss for.
+            **kwargs: Additional arguments.
+
+        Returns:
+        torch.Tensor: The ponder loss.
+        """
+        return avit_ponder_loss(model)
+
+class AViTDPriorLoss(ResidualModelLoss):
+    """
+    Computes the distribution prior loss of the model.
+    """
+
+    def __init__(self, target_depth: int) -> None:
+        super().__init__()
+        self.target_depth = target_depth
+
+    def forward(self, model, **kwargs):
+        """
+        Computes the distribution prior loss of the model.
+
+        Args:
+            model (nn.Module): The model to compute the distribution prior loss for.
+            **kwargs: Additional arguments.
+
+        Returns:
+        torch.Tensor: The distribution prior loss.
+        """
+        return avit_distr_prior_loss(model, target_depth=self.target_depth)
 class LossCompose:
     """
     A class that composes multiple loss functions together.
