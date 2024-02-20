@@ -98,7 +98,12 @@ def solo_l1(model, budget: float = 0.25, strict:bool = False, **kwargs):
     return torch.mean(sparsity_loss)
 
 
-def solo_mse(model, budget: float = 0.65, strict: bool = False, skip_layers: List = [], **kwargs):
+def solo_mse(model, 
+             budget: float = 0.65, 
+             strict: bool = False, 
+             skip_layers: List = [],  
+             per_layer: bool = True,
+             **kwargs):
     
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
     masks = get_forward_masks(model)
@@ -107,15 +112,23 @@ def solo_mse(model, budget: float = 0.65, strict: bool = False, skip_layers: Lis
     sparsity_loss = []
     for layer, (_, mask) in enumerate(masks.items()):
         if layer not in skip_layers: 
-            sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask
-            # if budget > 0.9 : strict = True # TODO quick test
-            sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
+            sparsity = reduce(mask, 'b s 1 -> b', 'mean') # this is basically the percentage of 1s in the mask, for each image in the batch
+            
+            # if per layer, we compute MSE for each layer 
+            if per_layer:
+                sparsity = torch.sum((sparsity - budget) ** 2 if strict else (relu(sparsity - budget))**2)
             sparsity_loss.append(sparsity)
-            # sparsity_loss.append(sparsity + (1-budget) / 1e1) # TODO added this correction term here 
+             
     
     sparsity_loss = torch.stack(sparsity_loss)
 
-    return torch.mean(sparsity_loss)
+
+    if not per_layer:
+        # if not per layer, we average the sparsity across all layers and then compute the MSE 
+        sparsity_loss = torch.mean(sparsity_loss)
+        sparsity_loss = torch.sum((sparsity_loss - budget) ** 2 if strict else (relu(sparsity_loss - budget))**2)
+
+    return torch.mean(sparsity_loss) * (2-budget)
 
 
 def avit_ponder_loss(model, **kwargs):
@@ -255,13 +268,14 @@ class MSELoss(ResidualModelLoss):
     Computes the MSE loss of the model.
     """
 
-    def __init__(self, budget: float = None, strict: bool = False, skip_layers : List = [], **kwargs) -> None:
+    def __init__(self, budget: float = None, strict: bool = False, skip_layers : List = [], per_layer:bool = True, **kwargs) -> None:
         super().__init__()
         self.budget = budget
         self.strict = strict
         self.skip_layers = skip_layers
+        self.per_layer = per_layer
 
-    def forward(self, model, budget = None, **kwargs):
+    def forward(self, model, budget = None, per_layer: bool = None, **kwargs):
         """
         Computes the MSE loss of the model.
 
@@ -273,8 +287,8 @@ class MSELoss(ResidualModelLoss):
             torch.Tensor: The MSE loss.
         """
         assert budget or self.budget, 'budget must be provided either as argument or as class attribute'
-        
-        return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
+        per_layer = per_layer if per_layer is not None else self.per_layer
+        return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers, per_layer=per_layer)
 
 
 class ChannelMSELoss(ResidualModelLoss):

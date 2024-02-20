@@ -3,6 +3,10 @@ from typing import Literal
 from torchvision import transforms as T
 
 class Food101Dataset:
+    
+    FOOD101_DENORMALIZE_TRANSFORM =  T.Compose([
+                                      T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
+                                      T.Normalize(mean=[-0.485, -0.456, -0.406], std=[1, 1, 1])])
 
     def __init__(self,
                 root, 
@@ -24,6 +28,7 @@ class Food101Dataset:
         _train_transform, _test_transform = self.get_imagenet_transforms()
         train_transform = train_transform or _train_transform
         test_transform = test_transform or _test_transform
+        self.denormalize_transform = self.FOOD101_DENORMALIZE_TRANSFORM
 
         if 'num_classes' in kwargs:
             print(f'Warning: num_classes is not used for {self.__class__.__name__}. \nIgnoring the argument and using default number of classes in this dataset (101).')
