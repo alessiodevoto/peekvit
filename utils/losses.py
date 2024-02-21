@@ -142,7 +142,7 @@ def avit_ponder_loss(model, **kwargs):
     Returns:
         torch.Tensor: The ponder loss.
     """
-    ponder_loss = torch.mean(model.rho_token)
+    ponder_loss = torch.mean(model.encoder.rho_token)
 
     return ponder_loss
 
@@ -159,11 +159,13 @@ def avit_distr_prior_loss(model, target_depth=7, **kwargs):
     Returns:
         torch.Tensor: The distribution prior loss.
     """
+    
     target_dist = torch.distributions.Normal(loc=target_depth, scale=1.0)
     target_dist = target_dist.log_prob(torch.arange(model.num_layers) + 1)
-    halting_score_distr = model.halting_score_distr
+    halting_score_distr = torch.stack(model.encoder.halting_score_layer)
     halting_score_distr = halting_score_distr / torch.sum(halting_score_distr)
     halting_score_distr = torch.clamp(halting_score_distr, 0.001, 0.999)
+    
     distr_prior_loss = torch.nn.functional.kl_div(halting_score_distr.log(),
                                                     target_dist.to(halting_score_distr.device).detach(),
                                                     reduction='batchmean',
@@ -457,5 +459,3 @@ class LossCompose:
             return losses_dict, total_loss
         else:
             return total_loss
-
-

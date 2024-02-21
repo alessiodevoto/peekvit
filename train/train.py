@@ -19,6 +19,7 @@ from peekvit.utils.utils import get_checkpoint_path, save_state, load_state, mak
 from peekvit.models.topology import reinit_class_tokens, train_only_these_params
 from peekvit.utils.losses import LossCompose
 from peekvit.utils.visualize import plot_masked_images
+from peekvit.models.topology import remove_layers_and_stitch
 
 
 
@@ -66,6 +67,10 @@ def train(cfg: DictConfig):
         model = reinit_class_tokens(model)
     
 
+    if training_args['remove_layers']:
+        model = remove_layers_and_stitch(model, training_args['remove_layers'])
+        
+    
 
     # main loss 
     main_criterion = instantiate(cfg.loss.classification_loss)
