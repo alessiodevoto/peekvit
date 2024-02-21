@@ -180,7 +180,6 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
       plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
     
     
-
 def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additional_x_labels="", run_names=None):
 
     results_per_noise = {}
@@ -198,7 +197,6 @@ def plot_cumulative_budget_and_noise_recap(run_accs_per_flops, save_dir, additio
     for noise, exps in results_per_noise.items():
         plot_cumulative_budget_recap(run_accs_per_budget=None, run_accs_per_flops=exps, save_dir=save_dir, additional_label=f'_noise_{noise}', run_names=run_names) 
        
-
 
 def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, additional_x_labels=""):
     # results per budget is a dict of dicts, where the first key is the budget and 
@@ -576,11 +574,13 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
 
     # prepare plot, we want a row for each residual layer,
     # and two columns, one for the image and one for token masks
-    fig, axs = plt.subplots(len(gates.keys())+1, 1, squeeze=False, figsize=(10, 25))
+    fig, axs = plt.subplots(len(gates.keys())+1, 1, squeeze=False, figsize=(3, 25))
 
     # plot the image
     img = prepare_for_matplotlib(visualization_transform(img) if visualization_transform is not None else img)
     axs[0,0].imshow(img)
+    axs[0,0].set_xticks([])
+    axs[0,0].set_yticks([])
 
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
@@ -596,8 +596,16 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
         
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
-      axs[layer_idx+1,0].title.set_text(layer_name)
-      cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2)
+      
+      # remove left and right margin 
+      plt.tight_layout()
+
+      # remove ticks on x and y axis
+      axs[layer_idx+1,0].set_xticks([])
+      axs[layer_idx+1,0].set_yticks([])
+
+      #axs[layer_idx+1,0].title.set_text(layer_name) # to display transf layer name
+      #cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2) # to display colorbar
 
       # set title to predicted and ground truth class
       try:

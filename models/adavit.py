@@ -41,8 +41,8 @@ class AViTBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
-        gate_scale: float = 5,
-        gate_center: float =-10,
+        gate_scale: float = 10,
+        gate_center: float = 30,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -100,6 +100,8 @@ class AViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         eps: float = 0.01,
+        gate_scale: float = 10,
+        gate_center: float = 30,
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -115,6 +117,8 @@ class AViTEncoder(nn.Module):
                             mlp_dim,
                             dropout,
                             attention_dropout,
+                            gate_scale,
+                            gate_center
                             ))
 
         self.layers = nn.ModuleList(layers)
@@ -243,6 +247,9 @@ class AdaptiveVisionTransformer(nn.Module):
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         num_class_tokens: int = 1,
+        eps: float = 0.01,
+        gate_scale: float = 10,
+        gate_center: float = 30,
         torch_pretrained_weights: Optional[str] = None,
         timm_pretrained_weights: Optional[List] = None,
     ):
@@ -260,6 +267,9 @@ class AdaptiveVisionTransformer(nn.Module):
             representation_size (int, optional): The size of the output representation. Defaults to None.
             num_registers (int, optional): The number of register tokens to be added. Defaults to 0.
             num_class_tokens (int, optional): The number of class tokens to be added. Defaults to 1.
+            eps (float, optional): The epsilon value for the ACT. Defaults to 0.01.
+            gate_scale (float, optional): The scale value for the ACT. Defaults to 10.
+            gate_center (float, optional): The center value for the ACT. Defaults to 30.
             torch_pretrained_weights (str, optional): The path to the pretrained weights in the Torch format. Defaults to None
                 Example: 'ViT_B_16_Weights[IMAGENET1K_V1]'.
                 See options at https://github.com/pytorch/vision/blob/a52607ece94aedbe41107617ace22a8da91efc25/torchvision/models/vision_transformer.py#L351
@@ -281,6 +291,9 @@ class AdaptiveVisionTransformer(nn.Module):
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
         self.num_layers = num_layers
+        self.eps = eps
+        self.gate_scale = gate_scale
+        self.gate_center = gate_center
         
 
 
@@ -304,7 +317,10 @@ class AdaptiveVisionTransformer(nn.Module):
             hidden_dim,
             mlp_dim,
             dropout,
-            attention_dropout
+            attention_dropout,
+            eps,
+            gate_scale,
+            gate_center
             )
 
 
