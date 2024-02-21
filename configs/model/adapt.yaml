@@ -7,6 +7,6 @@ num_layers: 4
 num_heads: 4
 num_class_tokens: 1
 drop_layers: [0, 1, 2, 3]
-drop_target: 0.3
+drop_target: 0.8
 warmup_start: 20
 warmup_steps: 20
