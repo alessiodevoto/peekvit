@@ -69,6 +69,12 @@ class AViTBlock(nn.Module):
         analyze_delta = True
         bs, token, dim = x.shape
 
+        # x is bs, seq_len, token_dim
+        # mask is bs, seq_len
+        # print('Input shape', x.shape)
+        # print('Mask shape', mask.shape)
+        # print('Mask', 1-mask)
+
         if mask is None:
             x = x + self.self_attention(self.ln_1(x))
             x = x + self.mlp(self.ln_2(x))

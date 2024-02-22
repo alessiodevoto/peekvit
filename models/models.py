@@ -7,6 +7,7 @@ from .encdecresidualvit import ResidualVisionTransformerWithDecoder
 from .rankvit import RankVisionTransformer
 from .pct import PointCloudTransformer
 from .rankpct import RankPointCloudTransformer
+from .adavit import AdaptiveVisionTransformer
 
 
 ###########################################################################################################################
@@ -39,7 +40,8 @@ MODELS_MAP = {
     'RankPointCloudTransformer': RankPointCloudTransformer,
     'rankpointcloudtransformer': RankPointCloudTransformer,
 
-
+    'AdaptiveVisionTransformer': AdaptiveVisionTransformer,
+    'adavit': AdaptiveVisionTransformer
 
 }
 
