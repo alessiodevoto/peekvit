@@ -15,23 +15,9 @@ from torch.autograd import Variable
 Adaptive Vision Transformer (AViT) as per https://arxiv.org/pdf/2112.07658.pdf.
 """
 
-"""def get_distribution_target(mode='gaussian', length=12, max=1, standardized=True, target_depth=8, buffer=0.02):
-    # this gets the distributional target to regularize the ACT halting scores towards
-    if mode == 'gaussian':
-        from scipy.stats import norm
-        # now get a serios of length
-        data = np.arange(length)
-        data = norm.pdf(data, loc=target_depth, scale=1)
-
-        if standardized:
-            print('\nReshaping distribution to be top-1 sum 1 - error at {}'.format(buffer))
-            scaling_factor = (1.-buffer) / sum(data[:target_depth])
-            data *= scaling_factor
-
-        return data"""
 
 
-# ViT Block
+# AViT Block
 class AViTBlock(nn.Module):
     """Transformer encoder block."""
 

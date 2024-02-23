@@ -351,6 +351,7 @@ class RankVisionTransformer(nn.Module):
         for rankvitblock in self.encoder.layers:
             if hasattr(rankvitblock, 'set_budget'):
                 rankvitblock.set_budget(budget)
+        self.enable_ranking(True)
 
 
     def load_weights(

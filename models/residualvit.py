@@ -599,6 +599,8 @@ class ResidualVisionTransformer(nn.Module):
 
 
     def set_budget(self, budget: float):
+        if self.training:
+            raise ValueError('You cannot set the budget during training in this model. This model has a learnable budget so you have to set it at the beginning of the training and then sample it during training. Use the add_budget_token parameter to specify the budget sampling strategy.')
         self.current_budget = budget
     
 

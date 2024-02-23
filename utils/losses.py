@@ -10,8 +10,18 @@ from typing import List, Literal
 from hydra.utils import instantiate
 
 
+"""
+A set of functions and classes for computing different types of losses.
+Class implementations subclass the abstract class ModelLoss, which requires the implementation of a forward method.
+ModelLoss subclasses are used to compute model specific regularizations, so they receive the model as input and return a loss value.
 
-class ResidualModelLoss(torch.nn.Module, ABC):
+Multiple losses can be composed together using the LossCompose class, which takes a dictionary of loss functions and their arguments as input.
+See the config/loss files to see how to use the LossCompose class.
+
+"""
+
+
+class ModelLoss(torch.nn.Module, ABC):
     
     @abstractmethod
     def forward(self, model, **kwargs):
@@ -174,7 +184,6 @@ def avit_distr_prior_loss(model, target_depth=7, **kwargs):
     return  distr_prior_loss
 
 
-
 def l1_and_intraentropy(model, budget: float = 0.65,  **kwargs):
 
     # get all masks from the model, each mask is a tensor of shape (batch_size, sequence_len, 1)
@@ -196,7 +205,7 @@ def l1_and_intraentropy(model, budget: float = 0.65,  **kwargs):
 
 ####################################################### class implementations ##################################################################
 
-class SparsityLoss(ResidualModelLoss):
+class SparsityLoss(ModelLoss):
     """
     Computes the sparsity loss of the model.
     """
@@ -219,7 +228,7 @@ class SparsityLoss(ResidualModelLoss):
         return sparsity_loss_per_block(model, budget= budget or self.budget, **kwargs)
 
 
-class EntropyLoss(ResidualModelLoss):
+class EntropyLoss(ModelLoss):
     """
     Computes the entropy loss of the model.
     """
@@ -241,7 +250,7 @@ class EntropyLoss(ResidualModelLoss):
         return entropy_per_blocks(model)
 
 
-class L1Loss(ResidualModelLoss):
+class L1Loss(ModelLoss):
     """
     Computes the L1 loss of the model.
     """
@@ -265,7 +274,7 @@ class L1Loss(ResidualModelLoss):
         return solo_l1(model, budget or self.budget)
 
 
-class MSELoss(ResidualModelLoss):
+class MSELoss(ModelLoss):
     """
     Computes the MSE loss of the model.
     """
@@ -293,7 +302,7 @@ class MSELoss(ResidualModelLoss):
         return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers, per_layer=per_layer)
 
 
-class ChannelMSELoss(ResidualModelLoss):
+class ChannelMSELoss(ModelLoss):
     """
     Computes the MSE loss of the model. It is a copy of MSELoss with a different name. 
     The reason for the different name is that this loss is supposed to be used for channel bandwith and not for general model budget.
@@ -320,7 +329,8 @@ class ChannelMSELoss(ResidualModelLoss):
         
         return solo_mse(model, channel_budget if channel_budget is not None else self.budget, self.strict, skip_layers=self.skip_layers)
 
-class L1AndIntraEntropyLoss(ResidualModelLoss):
+
+class L1AndIntraEntropyLoss(ModelLoss):
     """
     Computes the L1 loss and the intra-entropy of the model.
     """
@@ -343,7 +353,7 @@ class L1AndIntraEntropyLoss(ResidualModelLoss):
         return l1_and_intraentropy(model, budget or self.budget)
 
 
-class AlwaysZeroLoss(ResidualModelLoss):
+class AlwaysZeroLoss(ModelLoss):
     """
     A loss function that always returns zero.
     """
@@ -355,7 +365,7 @@ class AlwaysZeroLoss(ResidualModelLoss):
         return torch.tensor(0.0), torch.tensor(0.0)
 
 
-class AViTPonderLoss(ResidualModelLoss):
+class AViTPonderLoss(ModelLoss):
     """
     Computes the ponder loss of the model.
     """
@@ -376,7 +386,8 @@ class AViTPonderLoss(ResidualModelLoss):
         """
         return avit_ponder_loss(model)
 
-class AViTDPriorLoss(ResidualModelLoss):
+
+class AViTDPriorLoss(ModelLoss):
     """
     Computes the distribution prior loss of the model.
     """
@@ -397,6 +408,10 @@ class AViTDPriorLoss(ResidualModelLoss):
         torch.Tensor: The distribution prior loss.
         """
         return avit_distr_prior_loss(model, target_depth=self.target_depth)
+
+
+
+#########################################################################################################################
 
 
 class LossCompose:
