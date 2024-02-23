@@ -96,9 +96,9 @@ def train(cfg: DictConfig):
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
-        if 'training_budget' in training_args and hasattr(model, 'set_budget'):
-            print(f'Setting training budget to {training_args["training_budget"]}')
-            model.set_budget(training_args['training_budget'])
+        if 'train_budget' in training_args and hasattr(model, 'set_budget'):
+            print(f'Setting training budget to {training_args["train_budget"]}')
+            model.set_budget(training_args['train_budget'])
  
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)

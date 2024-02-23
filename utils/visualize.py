@@ -548,7 +548,14 @@ def display_expert_embeddings(model, save_dir):
 ######################################################## Residual ##################################################################
 
 @torch.no_grad()
-def plot_masked_images(model, images, model_transform=None, visualization_transform=None, hard=True):
+def plot_masked_images(
+   model, 
+   images, 
+   model_transform=None, 
+   visualization_transform=None, 
+   hard=True,
+   skip_layers: List[int] = [],
+   ):
   model.eval()
   device = get_model_device(model)
   num_registers = getattr(model, 'num_registers', 0) 
@@ -584,6 +591,9 @@ def plot_masked_images(model, images, model_transform=None, visualization_transf
 
     # for each layer, plot the image and the token mask
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
+
+      if layer_idx in skip_layers:
+        continue
       
       forward_mask = forward_mask[:, num_class_tokens+num_registers-1:].detach().reshape(-1, patches_per_side, patches_per_side)  # discard class token and reshape as image
       

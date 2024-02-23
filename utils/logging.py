@@ -1,20 +1,34 @@
 import os
 import wandb
 from pprint import pprint
+import time
+
+last_print_time = 0
+
 
 class SimpleLogger:
     """
     Simple logger for logging to stdout and to a file.
     """
-    def __init__(self, settings, dir):
+    def __init__(self, settings, dir, log_every:int =60):
+        self.log_every = log_every
         self.log_file_path = os.path.join(dir, 'log.txt')
         os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
         self.log_file = open(self.log_file_path, 'a+')
         self.log(settings[0])
+
+        print('Logging to', self.log_file_path)
+        print('This local logger is not recommended for large scale experiments. Use wandb instead.')
         
     
     def log(self, args):
-        pprint(args)
+        global last_print_time
+        current_time = time.time()
+    
+        # Check if it's been at least a minute since the last print
+        if current_time - last_print_time >= self.log_every:
+            last_print_time = current_time 
+            pprint(args)
         print(args, file=self.log_file)
         self.log_file.flush()
 
