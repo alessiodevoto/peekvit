@@ -126,10 +126,10 @@ def validate(
             logger.log({f'test/budget_{budget}/noise_{noise_val}': acc})
             accs.append(acc)
 
-
+            
 
             flops = 0    
-            move_dataset_to_device(flops_loader, device)        
+            # move_dataset_to_device(flops_loader, device)        
             for batch, labels in tqdm(flops_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
                 batch, labels = batch.to(device), labels.to(device)
                 num_flops, num_params = compute_flops(

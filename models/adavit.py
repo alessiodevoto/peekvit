@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import math
 from typing import Optional, List
 from abc import ABC
+import os
 from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
 
 import numpy as np
@@ -343,22 +344,7 @@ class AdaptiveVisionTransformer(nn.Module):
             nn.init.zeros_(self.conv_proj.bias)
         
 
-        if torch_pretrained_weights is not None:
-            print('Loading torch pretrained weights: ', torch_pretrained_weights)
-            from .adapters import adapt_torch_state_dict
-            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict(progress=False)
-            adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
-            self.load_state_dict(adapted_state_dict, strict=False)
-        elif timm_pretrained_weights is not None:
-            print('Loading timm pretrained weights: ', timm_pretrained_weights)
-            from .adapters import adapt_timm_state_dict
-            model = torch.hub.load(timm_pretrained_weights[0], timm_pretrained_weights[1], pretrained=True)
-            timm_pretrained_weights = model.state_dict()
-            adapted_state_dict = adapt_timm_state_dict(timm_pretrained_weights, num_classes=num_classes)
-            self.load_state_dict(adapted_state_dict, strict=False)
-            del model
-
-
+        self.load_weights(torch_pretrained_weights, timm_pretrained_weights)
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:
@@ -408,5 +394,55 @@ class AdaptiveVisionTransformer(nn.Module):
 
         return x
 
+
+    def load_weights(
+        self, 
+        torch_pretrained_weights: Optional[str] = None, 
+        timm_pretrained_weights: Optional[List] = None):
+        """
+        Loads pretrained weights into the model.
+
+        Args:
+            torch_pretrained_weights (str, optional): Path to the torch pretrained weights file or a URL to download from. Defaults to None.
+            timm_pretrained_weights (List, optional): List containing the name of the timm model and the variant to load pretrained weights from. Defaults to None.
+        
+        Example:
+            torch_pretrained_weights = 'ViT_B_16_Weights[IMAGENET1K_V1]'
+            timm_pretrained_weights = ['facebookresearch/deit_base_patch16_224', 'deit_base_patch16_224']
+            torch_pretrained_weights = 'path/to/torchweights.pth'
+            timm_pretrained_weights = 'path/to/timmweights.pth'
+        """
+        
+        # they cannot be both not None
+        assert not (torch_pretrained_weights and timm_pretrained_weights), "You cannot load weights from both torch and timm at the same time."
+        
+        
+        if torch_pretrained_weights is not None:
+            print('Loading torch pretrained weights: ', torch_pretrained_weights)
+            from .adapters import adapt_torch_state_dict
+            if not os.path.exists(str(torch_pretrained_weights)):
+                print('Downloading torch pretrained weights: ', torch_pretrained_weights)
+                torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict(progress=False)
+                adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=self.num_classes)
+            else:
+                torch_pretrained_weights = torch.load(torch_pretrained_weights)
+                print(f'Loaded torch pretrained weights with these keys {list(torch_pretrained_weights.keys())}. I assume the model weights are in the the "model" key.')
+                torch_pretrained_weights = torch_pretrained_weights['model']
+                adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=self.num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
+        elif timm_pretrained_weights is not None:
+            print('Loading timm pretrained weights: ', timm_pretrained_weights)
+            from .adapters import adapt_timm_state_dict
+            if not os.path.exists(str(timm_pretrained_weights)):
+                print('Downloading timm pretrained weights: ', timm_pretrained_weights)
+                model = torch.hub.load(timm_pretrained_weights[0], timm_pretrained_weights[1], pretrained=True)
+                timm_pretrained_weights = model.state_dict()
+                del model
+            else:
+                timm_pretrained_weights = torch.load(timm_pretrained_weights)
+                print(f'Loaded timm pretrained weights with these keys {list(timm_pretrained_weights.keys())}. I assume the model weights are in the the "model" key.')
+                timm_pretrained_weights = timm_pretrained_weights['model']
+            adapted_state_dict = adapt_timm_state_dict(timm_pretrained_weights, num_classes=self.num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
     
     
