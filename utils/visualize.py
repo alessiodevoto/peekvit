@@ -555,6 +555,7 @@ def plot_masked_images(
    visualization_transform=None, 
    hard=True,
    skip_layers: List[int] = [],
+   overlay: bool = False,
    ):
   model.eval()
   device = get_model_device(model)
@@ -581,7 +582,7 @@ def plot_masked_images(
 
     # prepare plot, we want a row for each residual layer,
     # and two columns, one for the image and one for token masks
-    fig, axs = plt.subplots(len(gates.keys())+1, 1, squeeze=False, figsize=(3, 25))
+    fig, axs = plt.subplots(len(gates.keys())+1 - len(skip_layers), 1, squeeze=False, figsize=(3, 25))
 
     # plot the image
     img = prepare_for_matplotlib(visualization_transform(img) if visualization_transform is not None else img)
@@ -590,6 +591,7 @@ def plot_masked_images(
     axs[0,0].set_yticks([])
 
     # for each layer, plot the image and the token mask
+    plot_idx = 1
     for layer_idx, (layer_name, forward_mask) in enumerate(gates.items()):
 
       if layer_idx in skip_layers:
@@ -599,20 +601,24 @@ def plot_masked_images(
       
       # replace non-zero values with 1
       if hard:
-        # forward_mask = torch.nn.functional.relu(forward_mask - thresolds[layer_name]).ceil()
-        # print(torch.any(forward_mask >= 0.5))
-        # forward_mask = forward_mask.round()
         forward_mask = forward_mask.ceil()
+      
+      if overlay:
+        axs[plot_idx,0].imshow(img)
         
       forward_mask = prepare_for_matplotlib(forward_mask)
-      im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)
+      im = axs[plot_idx,0].imshow(forward_mask, vmin=0, vmax=1, alpha=0.1 if overlay else 1, cmap='Reds' if overlay else 'viridis')
+
+      
       
       # remove left and right margin 
       plt.tight_layout()
 
       # remove ticks on x and y axis
-      axs[layer_idx+1,0].set_xticks([])
-      axs[layer_idx+1,0].set_yticks([])
+      axs[plot_idx,0].set_xticks([])
+      axs[plot_idx,0].set_yticks([])
+
+      plot_idx += 1
 
       #axs[layer_idx+1,0].title.set_text(layer_name) # to display transf layer name
       #cbar = axs[layer_idx+1,0].figure.colorbar(im, ax=axs[layer_idx+1,0], orientation='horizontal', shrink=0.2) # to display colorbar

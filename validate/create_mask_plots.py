@@ -19,8 +19,7 @@ from pprint import pprint
 from torch.utils.data import Subset
 
 
-from peekvit.utils.utils import load_state, add_noise, make_experiment_directory
-from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_budget_recap, plot_cumulative_budget_and_noise_recap
+from peekvit.utils.utils import load_state, make_experiment_directory
 from peekvit.utils.visualize import plot_masked_images
 
 
@@ -89,6 +88,7 @@ def test(cfg: DictConfig):
                             images_to_plot,
                             visualization_transform=dataset.denormalize_transform,
                             hard=hard_mask,
+                            skip_layers=cfg.test.skip_layers_for_masks or []
                         )
             
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)

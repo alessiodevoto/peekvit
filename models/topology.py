@@ -158,31 +158,31 @@ def train_only_these_params(model, params_list: List, verbose:bool=False):
 
 
 
-def remove_layers_and_stitch(model, blocks_to_remove):
+def remove_layers_and_stitch(model, layers_to_remove: List[int]):
     """
     Resize a ViT model by removing certain blocks
 
     Parameters:
        model: A Vision Transformer to be resized
-       remove_blocks(list): list of indices of layers to be removed
+       layers_to_remove(List): list of indices of layers to be removed
 
     Returns:
        model: Resized ViT
     """
 
-    print('Removing layers:', blocks_to_remove)
+    print('Removing layers:', layers_to_remove)
     print('Initial number of layers:', len(model.encoder.layers))
 
     #remove specified blocks
-    blocks_to_remove.sort(reverse=True)
-    for i in blocks_to_remove:
+    layers_to_remove.sort(reverse=True)
+    for i in layers_to_remove:
         del model.encoder.layers[i]
 
     #adjust the model's weights (model's state dictionary)
     adjusted_state_dictionary={}
     for name, param in model.state_dict().items():
         #we check if the current name does not belong to any of the removed blocks
-        if not any(f"layers.{i}" in name for i in blocks_to_remove):
+        if not any(f"layers.{i}" in name for i in layers_to_remove):
             adjusted_state_dictionary[name]=param
 
     model.load_state_dict(adjusted_state_dictionary, strict=True)

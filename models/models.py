@@ -49,7 +49,7 @@ MODELS_MAP = {
 ###########################################################################################################################
 
 
-def build_model(model_class, model_args, noise_args=None):
+def build_model(model_class, model_args, noise_args=None, remove_layers=None):
     """
     Build a model based on the given model class and arguments. Possibly add noise.
     
@@ -71,12 +71,10 @@ def build_model(model_class, model_args, noise_args=None):
     
 
     model = MODELS_MAP[model_class](**model_args)
-    if torch_pretrained_weights:
-        state_dict = adapt_torch_state_dict(torch_pretrained_weights, model_args['num_classes'])
-        model.load_state_dict(state_dict, strict=True)
-    if timm_pretrained_weights:
-        raise NotImplementedError('Pretrained weights from timm are not yet supported in this loading function.')
-
+    
+    if remove_layers is not None:
+        from .topology import remove_layers_and_stitch
+        model = remove_layers_and_stitch(model, remove_layers)
     
     # add noise if requested
     if noise_args is not None and noise_args != {}:
