@@ -21,6 +21,12 @@ from peekvit.utils.losses import LossCompose
 from peekvit.utils.visualize import plot_masked_images
 from peekvit.models.topology import remove_layers_and_stitch
 
+try:
+    import wandb
+except ImportError:
+    print('Wandb is not installed. If you want to use it, please install it with pip install wandb')
+    wandb = None
+
 
 
 
@@ -201,6 +207,9 @@ def train(cfg: DictConfig):
                 plot_masks_in_training(model, cfg.training.val_budgets)
             else:
                 print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
+    
+    if wandb:
+        wandb.finish()
             
 
 
