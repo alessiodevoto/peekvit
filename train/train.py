@@ -105,7 +105,7 @@ def train(cfg: DictConfig):
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
-        """if 'train_budget' in training_args and hasattr(model, 'set_budget'):
+        if 'train_budget' in training_args and hasattr(model, 'set_budget'):
             # train_budget = training_args['train_budget'] 
             # interpolate budget between 1 and train_budget
             budget_warmup_epochs = 5 #training_args['budget_warmup_epochs']
@@ -119,7 +119,7 @@ def train(cfg: DictConfig):
                 if train_budget < 1.0:
                     model.enable_ranking(True)
                 else:
-                    model.enable_ranking(False)"""
+                    model.enable_ranking(False)
 
 
 
