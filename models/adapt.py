@@ -154,6 +154,7 @@ class AdaPTEncoder(nn.Module):
         self.num_layers = num_layers
         self.num_class_tokens = num_class_tokens
         self.gs = GumbelSoftmax(dim=-1, hard=True)
+        self.masks = None
         self.layers = nn.ModuleList(
             [
                 AdaPTBlock(
@@ -166,16 +167,15 @@ class AdaPTEncoder(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        if drop_target is not None:
-            drop_target = 1 - torch.pow(drop_target, torch.arange(1, num_layers+1))
+        self.current_budget = drop_target
         if drop_layers is not None:
             self.drop_layers = drop_layers
             for i, l in enumerate(drop_layers):
-                self.layers[l].set_target(drop_target[i])
+                self.layers[l].set_target(drop_target**i)
 
             self.drop_predictors = nn.ModuleList([DropPredictor(hidden_dim) for _ in range(len(drop_layers))])
 
-        self.warmup = 0
+        self.warmup = 1
 
     def get_decisions(self, input:torch.Tensor, prev_decision:torch.Tensor, p:int):
 
@@ -218,6 +218,7 @@ class AdaPTEncoder(nn.Module):
 
         mask = None
         prev_decision = torch.ones(B, N-1, 1, dtype=x.dtype, device=x.device)
+        self.masks = []
         p = 0
 
         for i, layer in enumerate(self.layers):
@@ -257,6 +258,8 @@ class AdaPTEncoder(nn.Module):
                 # reattach class tokens
                 if self.num_class_tokens > 0:
                     x = torch.cat([class_tokens, x], dim=1)
+
+                self.masks.append(decision)
 
             x = layer(x, mask, decision)
         return x    
@@ -315,10 +318,10 @@ class AdaptivePointCloudTransformer(nn.Module):
         self.num_layers = num_layers
         self.num_points = num_points
         self.drop_layers = drop_layers
-        self.drop_target = drop_target
         self.current_budget = drop_target
         self.warmup_start = warmup_start
         self.warmup_steps = warmup_steps
+        self.masks = None
 
         # Embedder
         self.embedder = ARPE(in_channels=3, out_channels=hidden_dim, npoints=num_points)
@@ -391,3 +394,4 @@ class AdaptivePointCloudTransformer(nn.Module):
     
     def set_budget(self, budget: float):
         self.current_budget = budget
+        

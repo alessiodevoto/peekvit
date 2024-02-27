@@ -94,7 +94,7 @@ def train(cfg: DictConfig):
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
-        """if 'train_budget' in training_args and hasattr(model, 'set_budget'):
+        if 'train_budget' in training_args and hasattr(model, 'set_budget'):
             # train_budget = training_args['train_budget'] 
             # interpolate budget between 1 and train_budget
             budget_warmup_epochs = 5 #training_args['budget_warmup_epochs']
@@ -108,7 +108,7 @@ def train(cfg: DictConfig):
                 if train_budget < 1.0:
                     model.enable_ranking(True)
                 else:
-                    model.enable_ranking(False)"""
+                    model.enable_ranking(False)
 
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
@@ -129,7 +129,12 @@ def train(cfg: DictConfig):
                 clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
             logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
-        
+            if hasattr(model, 'encoder'):
+                if getattr(model.encoder, 'masks', None) is not None:
+                    for i, mask in enumerate(model.encoder.masks):
+                        logger.log({f'train/mask_{i}': mask.mean().item()})
+                
+            
         if scheduler:
             logger.log({'train/lr': scheduler.get_last_lr()[0]})
             scheduler.step()
