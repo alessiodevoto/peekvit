@@ -123,6 +123,8 @@ def train(cfg: DictConfig):
 
 
 
+
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
