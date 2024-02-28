@@ -138,7 +138,7 @@ def solo_mse(model,
         sparsity_loss = torch.mean(sparsity_loss)
         sparsity_loss = torch.sum((sparsity_loss - budget) ** 2 if strict else (relu(sparsity_loss - budget))**2)
 
-    return torch.mean(sparsity_loss) * (2-budget)
+    return torch.mean(sparsity_loss) # * (2-budget))
 
 
 def avit_ponder_loss(model, **kwargs):
@@ -297,7 +297,7 @@ class MSELoss(ModelLoss):
         Returns:
             torch.Tensor: The MSE loss.
         """
-        assert budget or self.budget, 'budget must be provided either as argument or as class attribute'
+        assert budget is not None or self.budget is not None, 'budget must be provided either as argument or as class attribute'
         per_layer = per_layer if per_layer is not None else self.per_layer
         return solo_mse(model, budget if budget is not None else self.budget, self.strict, skip_layers=self.skip_layers, per_layer=per_layer)
 

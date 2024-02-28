@@ -47,24 +47,39 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
 
     q, k, v = input
 
+
     batch_first = multihead_attention_module.batch_first \
         if hasattr(multihead_attention_module, 'batch_first') else False
+    
+    # print('batch_first: ', batch_first)
+    
     if batch_first:
-        len_idx = 1
+        seq_len_idx = 1
+        batch_idx = 0
     else:
-        len_idx = 0
+        seq_len_idx = 0
+        batch_idx = 1
 
-    dim_idx = 2
+    emb_dim_idx = -1
+
+    qdim = q.shape[emb_dim_idx]
+    kdim = k.shape[emb_dim_idx]
+    vdim = v.shape[emb_dim_idx]
 
 
-    qdim = q.shape[dim_idx]
-    kdim = k.shape[dim_idx]
-    vdim = v.shape[dim_idx]
+    # assume always self attention
+    num_q_masked_tokens = count_masked_tokens(q, per_sequence=True)
+    num_k_masked_tokens = count_masked_tokens(k, per_sequence=True)
+    num_v_masked_tokens = count_masked_tokens(v, per_sequence=True)
 
     # we change len to exclude the tokens that are masked out
-    qlen = q.shape[len_idx] - count_masked_tokens(q, per_sequence=True)
-    klen = k.shape[len_idx] - count_masked_tokens(k, per_sequence=True)
-    vlen = v.shape[len_idx] - count_masked_tokens(v, per_sequence=True)
+    qlen = q.shape[seq_len_idx] - num_q_masked_tokens
+    klen = k.shape[seq_len_idx] - num_k_masked_tokens
+    vlen = v.shape[seq_len_idx] - num_v_masked_tokens
+
+    # print('q len : ', q.shape[1])
+    # print('q dim: ', qdim)
+    # print('q real len: ', qlen)
 
 
     num_heads = multihead_attention_module.num_heads
@@ -78,6 +93,8 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
     # Q scaling
     flops += qlen * qdim
 
+    # print('flops after Q scaling: ', flops)
+
     # Initial projections
     flops += (
         (qlen * qdim * qdim)  # QW
@@ -85,8 +102,13 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
         + (vlen * vdim * vdim)  # VW
     )
 
+    # print('flops after initial projections: ', flops)
+
+    
+
     if multihead_attention_module.in_proj_bias is not None:
         flops += (qlen + klen + vlen) * qdim
+        # print('flops after in_proj_bias: ', flops)
 
     # attention heads: scale, matmul, softmax, matmul
     qk_head_dim = qdim // num_heads
@@ -98,18 +120,28 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
         + (qlen * klen * v_head_dim)  # AV
     )
 
+    # print('flops per head: ', head_flops)
+
     flops += num_heads * head_flops
 
-    # final projection, bias is always enableds
+    # print('flops after attention heads: ', flops)
+
+    # final projection, bias is always enabled
     flops += qlen * vdim * (vdim + 1)
+
+    # print('flops after final projection: ', flops)
 
     # flops *= batch_size
     multihead_attention_module.__flops__ += int(flops.sum())
     
+    num_masked_tokens = count_masked_tokens(q, per_sequence=False)
+    # print('total tokens in batch: ', q.shape[0] * q.shape[1])
+    # print('masked in this batch: ', num_masked_tokens)
+    # print('flops: ', multihead_attention_module.__flops__)
+    
     if not hasattr(multihead_attention_module, 'avg_sparsity'):
         multihead_attention_module.avg_sparsity = torch.tensor(0.) #count_masked_tokens(q, per_sequence=False) 
-    else:
-        num_masked_tokens = count_masked_tokens(q, per_sequence=False) 
+    else: 
         multihead_attention_module.avg_sparsity = multihead_attention_module.avg_sparsity + num_masked_tokens.to(multihead_attention_module.avg_sparsity.device)
 
 

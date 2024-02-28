@@ -164,7 +164,7 @@ def remove_layers_and_stitch(model, layers_to_remove: List[int]):
 
     Parameters:
        model: A Vision Transformer to be resized
-       layers_to_remove(List): list of indices of layers to be removed
+       layers_toremove(List): list of indices of layers to be removed
 
     Returns:
        model: Resized ViT
@@ -173,20 +173,11 @@ def remove_layers_and_stitch(model, layers_to_remove: List[int]):
     print('Removing layers:', layers_to_remove)
     print('Initial number of layers:', len(model.encoder.layers))
 
-    #remove specified blocks
-    layers_to_remove.sort(reverse=True)
-    for i in layers_to_remove:
+    # remove layers
+    for i in sorted(layers_to_remove, reverse=True):
         del model.encoder.layers[i]
-
-    #adjust the model's weights (model's state dictionary)
-    adjusted_state_dictionary={}
-    for name, param in model.state_dict().items():
-        #we check if the current name does not belong to any of the removed blocks
-        if not any(f"layers.{i}" in name for i in layers_to_remove):
-            adjusted_state_dictionary[name]=param
-
-    model.load_state_dict(adjusted_state_dictionary, strict=True)
     
-    print('New number of layers:', len(model.encoder.layers))
+    print('Final number of layers:', len(model.encoder.layers))
+
 
     return model

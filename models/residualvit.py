@@ -522,16 +522,28 @@ class ResidualVisionTransformer(nn.Module):
 
         return x
     
-    def _sample_budget(self):
+    def _sample_single_budget(self):
         """
         Sample a budget, i.e. a float between 0 and 1, based on the self.add_budget_token parameter.
         """
         if isinstance(self.add_budget_token, (list, tuple)):
-            return torch.tensor(random.choice(self.add_budget_token))
+            b =  torch.tensor(random.choice(self.add_budget_token))
         elif isinstance(self.add_budget_token, float):
-            return torch.tensor(self.add_budget_token)
+            b = torch.tensor(self.add_budget_token)
         else:
-            return torch.rand(1) * (self.budget_interval[1] - self.budget_interval[0]) + self.budget_interval[0]
+            b = torch.rand(1) * (self.budget_interval[1] - self.budget_interval[0]) + self.budget_interval[0]
+        return b
+    
+    def _sample_budget(self, n):
+        # sample a different budget for each element in the batch
+        if isinstance(self.add_budget_token, (list, tuple)):
+            # TODO change this inefficient implementation
+            b =  torch.tensor([random.choice(self.add_budget_token) for _ in range(n)])
+        elif isinstance(self.add_budget_token, float):
+            b = torch.tensor(self.add_budget_token)
+        else:
+            b = torch.rand(n) * (self.budget_interval[1] - self.budget_interval[0]) + self.budget_interval[0]
+        return b
 
     def _add_budget_token(self, x):
         """
@@ -546,7 +558,7 @@ class ResidualVisionTransformer(nn.Module):
         """
         n = x.shape[0]
         if self.training:
-            sampled_budget = self._sample_budget()
+            sampled_budget = self._sample_budget(n)
             self.current_budget = sampled_budget.to(x.device)
         else:
             assert self.current_budget is not None, 'Budget token not set. Call set_budget() before forward() to evaluate the model on a chosen budget.'
@@ -554,7 +566,9 @@ class ResidualVisionTransformer(nn.Module):
         
 
         if self.add_budget_token == 'learnable':
-            batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) * self.current_budget
+            batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) 
+            batch_budget_token_1 = batch_budget_token_1 * self.current_budget.unsqueeze(-1).unsqueeze(-1)
+            # print(batch_budget_token_1)
             x = torch.cat([x, batch_budget_token_1], dim=1)
         elif self.add_budget_token == 'learnable_interpolate':
             batch_budget_token_1 = self.learnable_budget_token_1.expand(n, -1, -1) * self.current_budget
@@ -601,7 +615,7 @@ class ResidualVisionTransformer(nn.Module):
     def set_budget(self, budget: float):
         if self.training:
             raise ValueError('You cannot set the budget during training in this model. This model has a learnable budget so you have to set it at the beginning of the training and then sample it during training. Use the add_budget_token parameter to specify the budget sampling strategy.')
-        self.current_budget = budget
+        self.current_budget = torch.tensor(budget, device=self.class_tokens.device)
     
 
     def load_weights(

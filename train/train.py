@@ -65,6 +65,7 @@ def train(cfg: DictConfig):
     if load_from is not None:
         # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
         load_from = load_from if load_from.endswith('.pth') else get_checkpoint_path(load_from)
+        print('Loading a model from a local checkpoint. If you loaded a pretrained model, this will overwrite its parameters.')
         print('Loading model from checkpoint: ', load_from)
         model, _, _, _, _ = load_state(load_from, model=model)
     
@@ -168,6 +169,7 @@ def train(cfg: DictConfig):
     # Assumes model has budget 
     def plot_masks_in_training(model, budgets):
         
+        model.eval()
         subset_idcs = torch.arange(0, len(val_dataset), len(val_dataset)//training_args['num_images_to_plot'])
         images_to_plot = Subset(val_dataset, subset_idcs)
         hard_prefix = 'hard_'
@@ -188,7 +190,7 @@ def train(cfg: DictConfig):
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
                 img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
-        
+        model.train()
         
     
     # Training

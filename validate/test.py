@@ -123,7 +123,7 @@ def validate(
             
             acc = metric.compute()
             metric.reset()
-            logger.log({f'test/budget_{budget}/noise_{noise_val}': acc})
+            logger.log({f'test/budget_{budget}/noise_{noise_val}': acc.item()})
             accs.append(acc)
 
             
