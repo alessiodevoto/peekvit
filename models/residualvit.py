@@ -411,6 +411,7 @@ class ResidualVisionTransformer(nn.Module):
         budget_interval: Optional[List] = (0,1),
         torch_pretrained_weights: Optional[str] = None,
         timm_pretrained_weights: Optional[List] = None,
+        remove_layers: List[int]= []
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -500,6 +501,9 @@ class ResidualVisionTransformer(nn.Module):
 
         self.load_weights(torch_pretrained_weights, timm_pretrained_weights)
 
+        if remove_layers:
+            self.remove_layers(remove_layers)
+
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:
         n, c, h, w = x.shape
@@ -522,7 +526,7 @@ class ResidualVisionTransformer(nn.Module):
 
         return x
     
-    def _sample_single_budget(self):
+    def _sample_s_budget(self, **kwargs):
         """
         Sample a budget, i.e. a float between 0 and 1, based on the self.add_budget_token parameter.
         """
@@ -649,8 +653,13 @@ class ResidualVisionTransformer(nn.Module):
                 adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=self.num_classes)
             else:
                 torch_pretrained_weights = torch.load(torch_pretrained_weights)
-                print(f'Loaded torch pretrained weights with these keys {list(torch_pretrained_weights.keys())}. I assume the model weights are in the the "model" key.')
-                torch_pretrained_weights = torch_pretrained_weights['model']
+                print(f'Loaded torch pretrained weights with these keys {list(torch_pretrained_weights.keys())}')
+                if 'model'  in torch_pretrained_weights:
+                    torch_pretrained_weights = torch_pretrained_weights['model']
+                elif 'state_dict' in torch_pretrained_weights:
+                    torch_pretrained_weights = torch_pretrained_weights['state_dict']
+                else:
+                    raise ValueError('Could not find the state dict in the torch pretrained weights. I assume the model weights are in the the "model" or "state_dict" key of the checkpoint.')
                 adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=self.num_classes)
             self.load_state_dict(adapted_state_dict, strict=False)
         elif timm_pretrained_weights is not None:
@@ -669,3 +678,17 @@ class ResidualVisionTransformer(nn.Module):
             self.load_state_dict(adapted_state_dict, strict=False)
 
     
+    def remove_layers(self, remove_layers: List[int]):
+        """
+        Removes layers from the model.
+
+        Args:
+            remove_layers (List[int]): List of layer indices to remove.
+        """
+        print('Removing layers: ', remove_layers)
+        print('Initial number of layers:', len(self.encoder.layers))
+
+        for i in sorted(remove_layers, reverse=True):
+            del self.encoder.layers[i] 
+
+        print('Final number of layers:', len(self.encoder.layers))

@@ -73,10 +73,6 @@ def train(cfg: DictConfig):
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
     
-
-    if training_args['remove_layers']:
-        model = remove_layers_and_stitch(model, training_args['remove_layers'])
-        
     
 
     # main loss 
@@ -103,9 +99,9 @@ def train(cfg: DictConfig):
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
-        if 'train_budget' in training_args and hasattr(model, 'set_budget'):
+        if  training_args['train_budget'] and hasattr(model, 'set_budget'):
             print(f'Setting training budget to {training_args["train_budget"]}')
-            model.set_budget(training_args['train_budget'])
+            model.set_budget(training_args['train_budgedt'])
  
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)

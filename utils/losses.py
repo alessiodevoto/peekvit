@@ -138,7 +138,7 @@ def solo_mse(model,
         sparsity_loss = torch.mean(sparsity_loss)
         sparsity_loss = torch.sum((sparsity_loss - budget) ** 2 if strict else (relu(sparsity_loss - budget))**2)
 
-    return torch.mean(sparsity_loss) # * (2-budget))
+    return torch.mean(sparsity_loss * (2-budget))
 
 
 def avit_ponder_loss(model, **kwargs):

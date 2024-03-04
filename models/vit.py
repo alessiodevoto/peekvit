@@ -117,6 +117,7 @@ class VisionTransformer(nn.Module):
         num_class_tokens: int = 1,
         torch_pretrained_weights: Optional[str] = None,
         timm_pretrained_weights: Optional[List] = None,
+        remove_layers: List[int] = [],
     ):
         """
         Args:
@@ -132,6 +133,7 @@ class VisionTransformer(nn.Module):
             representation_size (int, optional): The size of the output representation. Defaults to None.
             num_registers (int, optional): The number of register tokens to be added. Defaults to 0.
             num_class_tokens (int, optional): The number of class tokens to be added. Defaults to 1.
+            remove_layers (List[int], optional): The list of layers to be removed from the model after loading from a checkpoint. Defaults to [].
             torch_pretrained_weights (str, optional): The path to the pretrained weights in the Torch format. Defaults to None
                 Example: 'ViT_B_16_Weights[IMAGENET1K_V1]'.
                 See options at https://github.com/pytorch/vision/blob/a52607ece94aedbe41107617ace22a8da91efc25/torchvision/models/vision_transformer.py#L351
@@ -192,6 +194,9 @@ class VisionTransformer(nn.Module):
             nn.init.zeros_(self.conv_proj.bias)
         
         self.load_weights(torch_pretrained_weights, timm_pretrained_weights)
+
+        if remove_layers:
+            self.remove_layers(remove_layers)
             
 
 
@@ -294,6 +299,18 @@ class VisionTransformer(nn.Module):
             self.load_state_dict(adapted_state_dict, strict=False)
 
        
+    def remove_layers(self, remove_layers: List[int]):
+        """
+        Removes layers from the model.
 
-    
+        Args:
+            remove_layers (List[int]): List of layer indices to remove.
+        """
+        print('Removing layers: ', remove_layers)
+        print('Initial number of layers:', len(self.encoder.layers))
+
+        for i in sorted(remove_layers, reverse=True):
+            del self.encoder.layers[i] 
+
+        print('Final number of layers:', len(self.encoder.layers))
     
