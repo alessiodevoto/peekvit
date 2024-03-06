@@ -239,7 +239,7 @@ def test(cfg: DictConfig):
             model_checkpoint_path, 
             logger,
             val_loader, 
-            flops_loader, # TODO add flops loader to function for validation
+            flops_loader, 
             budgets=cfg.test.budgets,
             noise_settings=cfg.noise,
             noises=cfg.test.noises,
@@ -286,6 +286,13 @@ def test(cfg: DictConfig):
         cumulative_plot_dir = cfg.test.cumulative_plot_dir
         os.makedirs(cfg.test.cumulative_plot_dir, exist_ok=True)
         print('Saving cumulative plots to ', cumulative_plot_dir)
+
+        # store results in a file in the cumulative plot dir
+        with open(join(cumulative_plot_dir, 'cumulative_log.txt'), 'w') as f:
+            f.write('Results per budget: \n')
+            f.write(str(dict(all_results_per_budget)))
+            f.write('\nResults per flops: \n')
+            f.write(str(dict(all_results_per_flops)))
         
 
         # noises = cfg.test.noises
@@ -302,7 +309,8 @@ def test(cfg: DictConfig):
                 run_accs_per_budget=all_results_per_budget, 
                 run_accs_per_flops=all_results_per_flops,
                 save_dir=cumulative_plot_dir,
-                run_names=cfg.test.run_names
+                run_names=cfg.test.run_names,
+                run_colors=cfg.test.run_colors
                 )
      
 
