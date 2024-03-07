@@ -12,6 +12,7 @@ from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from pprint import pprint
 from torch.utils.data import Subset
+import torch.nn.functional as F
 
 
 
@@ -24,7 +25,7 @@ from peekvit.utils.visualize import plot_masked_images
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="train_config_personal")
+@hydra.main(version_base=None, config_path="../configs", config_name="train_distill_config_personal")
 def train(cfg: DictConfig):
 
     torch.manual_seed(cfg.seed)
@@ -49,28 +50,30 @@ def train(cfg: DictConfig):
     train_loader = DataLoader(train_dataset, batch_size=training_args.train_batch_size, shuffle=True, num_workers=training_args.num_workers, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=training_args.eval_batch_size, shuffle=False, num_workers=training_args.num_workers, pin_memory=True)
 
-    # model
-    model = instantiate(cfg.model)
-    model.to(device)
+    # instantiate teacher model
+    teacher_model = instantiate(cfg.teacher_model)
+    teacher_model.to(device)
 
-    # load from checkpoint if requested
+    # load from checkpoint the teacher model
     load_from = cfg.load_from
     if load_from is not None:
         # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
         load_from = load_from if load_from.endswith('.pth') else get_checkpoint_path(load_from)
         print('Loading model from checkpoint: ', load_from)
-        model, _, _, _, _ = load_state(load_from, model=model)
+        teacher_model, _, _, _, _ = load_state(load_from, model=teacher_model)
     
-    # edit model here if requested
+    # instantiate student model
+    student_model = instantiate(cfg.student_model)
+    student_model.to(device)
+
+    # resize student model
+    student_model=resize_vit_model(student_model,[5])
+    print(student_model)
+    
+    # edit teacher_model here if requested
     if training_args['reinit_class_tokens']:
-        model = reinit_class_tokens(model)
-
-    # resize ViT here
-    blocks_to_remove=training_args['blocks_to_remove']
-    model = resize_vit_model(model,blocks_to_remove)
-    print(model)
-
-
+        teacher_model = reinit_class_tokens(teacher_model)
+    
 
     # main loss 
     main_criterion = instantiate(cfg.loss.classification_loss)
@@ -82,19 +85,20 @@ def train(cfg: DictConfig):
         additional_losses = LossCompose(cfg.loss.additional_losses)
         
     # metrics
-    metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
+    metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.student_model.num_classes).to(device)
 
     # optimizer and scheduler
-    optimizer = instantiate(cfg.optimizer, params=model.parameters())
+    optimizer = instantiate(cfg.optimizer, params=student_model.parameters())
     scheduler = None
     if 'scheduler' in cfg:
         scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
     # training loop
-    def train_epoch(model, loader, optimizer, epoch):
-        model.train()
+    def train_epoch(student_model, loader, optimizer, epoch):
+        teacher_model.eval()
+        student_model.train()
         if not training_args['train_backbone']:
-            model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
+            student_model = train_only_these_params(student_model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
         
         """if 'train_budget' in training_args and hasattr(model, 'set_budget'):
             # train_budget = training_args['train_budget'] 
@@ -115,19 +119,35 @@ def train(cfg: DictConfig):
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
-            out = model(batch)
-            main_loss = main_criterion(out, labels) 
+            # Student forward pass
+            student_out = student_model(batch)
+            # Teacher forward pass, no gradient needed
+            with torch.no_grad():
+                teacher_out = teacher_model(batch)
+            # Classification loss with student output and true labels
+            main_loss = main_criterion(student_out, labels) 
+
+            # Distillation loss
+            if training_args['kl_distill']:
+                distillation_loss = F.kl_div(F.log_softmax(student_out / training_args['temperature'], dim=1),
+                                     F.softmax(teacher_out / training_args['temperature'], dim=1),
+                                     reduction='batchmean') * (training_args['temperature'] ** 2)
+                
+            elif training_args['mse_distill']:
+                distillation_loss = F.mse_loss(student_out, teacher_out)
+
             add_loss_dict, add_loss_val = {}, 0.0
             if additional_losses is not None:
                 add_loss_dict, add_loss_val = additional_losses.compute(
-                    model, 
-                    budget=getattr(model, 'current_budget', None),
+                    student_model, 
+                    budget=getattr(student_model, 'current_budget', None),
                     dict_prefix='train/')
-            loss = main_loss + add_loss_val
+            # Total loss    
+            loss = training_args['alpha'] * main_loss + (1 - training_args['alpha']) * distillation_loss + add_loss_val
             loss.backward()
             # Apply gradient clipping
             if training_args['clip_grad_norm'] is not None:
-                clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
+                clip_grad_norm_(student_model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
             logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
         
@@ -200,17 +220,17 @@ def train(cfg: DictConfig):
     # Training
     for epoch in range(training_args['num_epochs']+1):
 
-        train_epoch(model, train_loader, optimizer, epoch)
+        train_epoch(student_model, train_loader, optimizer, epoch)
         
         if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
-            validate(model, val_loader, epoch)
+            validate(student_model, val_loader, epoch)
             
         if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
-            save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
+            save_state(checkpoints_dir, student_model, cfg.student_model, cfg.noise, optimizer, epoch)
         
         if training_args['plot_masks_every'] != -1 and epoch % training_args['plot_masks_every'] == 0:
-            if hasattr(model, 'set_budget'):
-                plot_masks_in_training(model, cfg.training.val_budgets)
+            if hasattr(student_model, 'set_budget'):
+                plot_masks_in_training(student_model, cfg.training.val_budgets)
             else:
                 print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
             

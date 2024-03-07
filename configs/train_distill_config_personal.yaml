@@ -1,4 +1,3 @@
-
 # Structure of the workspace:
 #
 # workspace
@@ -11,25 +10,31 @@
 #         ├── logs.txt
 #
 
-workspace: '<your_workspace>'
-experiments_dir: '${workspace}/runs'
+
+workspace: '/home/giordano/Documenti/Piagnina/peekvit'
+experiments_dir: '${workspace}/runs/'
 experiment_name: '${now:%Y-%m-%d-%H-%M-%S}'
 
 device: 'cuda:0'
 seed: 0
-load_from: #['${experiments_dir}/2024_01_16_14_32_13_vit_bb_16_sb_'] #, '${experiments_dir}/2024_01_04_14_38_28_single_budget_strict']
+load_from: null
 
 hydra:
   run:
     dir: '${experiments_dir}/${experiment_name}/'
 
 
+
 defaults:
   - logger: wandb
   - dataset: imagenette
-  - model: null             # if null, will try infer the model type form checkpoint, if possible.
-  - noise: no_noise
-  - test: base
+  - teacher_model: deit_s_16_224
+  - student_model: vit_distill
+  - training: distill
+  - optimizer: adam
+  - scheduler: null
+  - loss: crossentropy
+  - noise: no_noise 
   - _self_
 
 

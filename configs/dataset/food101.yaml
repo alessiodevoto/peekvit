@@ -1,5 +1,5 @@
 _target_: peekvit.data.food101.Food101Dataset
-root: '/hdd2/aledev/datasets/food101'
+root: '${workspace}/datasets/food101'
 image_size: 224                                   # used by default by model as well
 split: 'train+test'
 download: True

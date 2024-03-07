@@ -1,0 +1,8 @@
+_target_: peekvit.models.vit.VisionTransformer
+num_classes: ${dataset.num_classes}
+image_size: ${dataset.image_size}
+patch_size: 16
+num_layers: 12
+hidden_dim: 192
+mlp_dim: 768
+num_heads: 3
