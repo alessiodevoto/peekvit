@@ -21,7 +21,16 @@ import wandb
 
 from .utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
 
-def hash_to_color(s):
+
+"""
+This module contains utility functions for visualizing the outputs of models.
+It assumes that the model is a transformer-based model and is implemented using the classes from this repository.
+"""
+
+
+
+
+def hashcolor(s):
     """
     Convert a string to a unique color using its hash value.
     """
@@ -116,7 +125,7 @@ def plot_cumulative_budget_recap(
       ):
     
     # we assume maximum 30 colors per plot
-    run_colors = run_colors or [hash_to_color(i) for i in range(30)]
+    run_colors = run_colors or [hashcolor(i) for i in range(30)]
 
     
     if run_accs_per_budget is not None:
@@ -234,7 +243,7 @@ def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, add
     for run, results_per_noise in _results_per_noise.items():
         is_base_run = 'base' in run
         for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=hash_to_color(str(noise)))
+            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=hashcolor(str(noise)))
             ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
@@ -255,204 +264,6 @@ def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, add
     if save_dir is not None:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
         plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc_noises.png'))
-       
-      
-    return fig
-
-
-######################################################## OLD ##################################################################
-def plot_budget_vs_acc(budgets, accs, epoch, save_dir):
-  """
-  Plots the accuracy vs budget curve for the given budgets and accuracies.
-
-  Args:
-    budgets (List): The budgets.
-    accs (List): The accuracies.
-    save_dir (str): The directory to save the plot.
-
-  Returns:
-    None
-  """
-  fig, ax = plt.subplots()
-  ax.plot(budgets, accs, marker='o')
-
-  # set labels
-  ax.set_xlabel('Budget')
-  ax.set_ylabel('Accuracy')
-  ax.set_title('Budget vs Accuracy')
-
-  # set y range
-  # # plt.ylim([0.4, 0.9])
-  plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-
-  # create save dir if it does not exist
-  if save_dir is not None:
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    plt.savefig(os.path.join(save_dir, f'budget_vs_acc_{epoch}.png'))
-  
-  return fig
-
-
-def plot_budget_vs_sparsity(budgets, accs, epoch, save_dir):
-  """
-  Plots the accuracy vs budget curve for the given budgets and accuracies.
-
-  Args:
-    budgets (List): The budgets.
-    accs (List): The accuracies.
-    save_dir (str): The directory to save the plot.
-
-  Returns:
-    None
-  """
-  fig, ax = plt.subplots()
-  ax.plot(budgets, accs, marker='o')
-
-  # set labels
-  ax.set_xlabel('Budget')
-  ax.set_ylabel('Sparsity')
-  ax.set_title('Budget vs Sparsity')
-
-  # set y range
-  plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-
-  # create save dir if it does not exist
-  if save_dir is not None:
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    plt.savefig(os.path.join(save_dir, f'budget_vs_sparsity_{epoch}.png'))
-  
-  return fig
-
-
-def plot_noise_vs_acc(budgets, accs, epoch, save_dir, additional_label=None):
-  """
-  Plots the accuracy vs noise curve for the given noises and accuracies.
-
-  Args:
-    noise (List): The noises.
-    accs (List): The accuracies.
-    save_dir (str): The directory to save the plot.
-
-  Returns:
-    None
-  """
-  fig, ax = plt.subplots()
-  ax.plot(budgets, accs, marker='o')
-
-  # set labels
-  ax.set_xlabel('Noise')
-  ax.set_ylabel('Accuracy')
-  ax.set_title('Noise vs Accuracy' if additional_label is None else f'Noise vs Accuracy ({additional_label})')
-
-  # set y range
-  # # plt.ylim([0.1, 1.0])
-
-  # create save dir if it does not exist
-  if save_dir is not None:
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    plt.savefig(os.path.join(save_dir, f'noise_vs_acc_{epoch}.png'))
-  
-  return fig
-
-
-def plot_budget_vs_noise_vs_acc(results_per_budget: dict,  save_dir: str = None):
-    # results per budget is a dict of dicts, where the first key is the budget and 
-    # the second key is the noise value, and the value is the accuracy.
-    # we want to create a plot where the x axis is the noise value, the y axis is the accuracy, 
-    # and we have a line for each budget
-
-    fig, ax = plt.subplots()
-    
-    for budget, results in results_per_budget.items():
-        ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-        ax.set_xlabel('Noise')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Noise vs Accuracy across budgets')
-        ax.legend()
-
-
-        # create save dir if it does not exist
-        if save_dir is not None:
-          Path(save_dir).mkdir(parents=True, exist_ok=True)
-          plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
-    
-    return fig
-  
-
-def plot_model_budget_vs_noise_vs_acc(results_per_model: dict, save_dir: str = None):
-    # results per budget is a dict of dicts, where the first key is the budget and 
-    # the second key is the noise value, and the value is the accuracy.
-    # we want to create a plot where the x axis is the noise value, the y axis is the accuracy, 
-    # and we have a line for each budget
-
-    fig, ax = plt.subplots()
-
-    for model_name, results_per_budget in results_per_model.items():
-    
-      for budget, results in results_per_budget.items():
-          ax.plot(results.keys(), results.values(), marker='o', label=f'budget {budget}')
-          ax.set_xlabel('Noise')
-          ax.set_ylabel('Accuracy')
-          ax.set_title('Noise vs Accuracy across budgets')
-          ax.legend()
-          # set y range
-          # # plt.ylim([0.1, 1.0])
-
-          # create save dir if it does not exist
-          if save_dir is not None:
-            Path(save_dir).mkdir(parents=True, exist_ok=True)
-            plt.savefig(os.path.join(save_dir, f'noise_vs_acc_budgets.png'))
-      
-    return fig
-
-
-def plot_model_noise_vs_budget_vs_acc(results_per_model: dict, save_dir: str = None, additional_x_labels: List = None):
-    # results per budget is a dict of dicts, where the first key is the budget and 
-    # the second key is the noise value, and the value is the accuracy.
-    # we want to create a plot where the x axis is the budget, the y axis is the accuracy, 
-    # and we have a line for each noise
-
-    # create new dictionary with noise as first key and budget as second key
-
-    _results_per_noise = {}
-    for run in results_per_model:
-        _results_per_noise[run] = defaultdict(dict)
-        for budget in results_per_model[run]:   
-            for noise in results_per_model[run][budget]:
-                _results_per_noise[run][noise][budget if budget not in {0.0, float('inf')} else 1.1] = results_per_model[run][budget][noise]
-
-    print(_results_per_noise)
-
-
-    fig, ax = plt.subplots()
-    
-    for run, results_per_noise in _results_per_noise.items():
-        is_base_run = 'base' in run
-        for noise, results in results_per_noise.items():
-            ax.plot(results.keys(), results.values(), marker='o' if not is_base_run else '*', label=f'noise {noise}', color=hash_to_color(str(noise)))
-            ax.set_xlabel(f'Budgets {additional_x_labels if additional_x_labels is not None else ""}')
-            ax.set_ylabel('Accuracy')
-            ax.set_title('Budget vs Accuracy across Noises')
-            # set y range
-            # # plt.ylim([0.1, 1.0])
-
-            
-            #x_ticks = [f'{x}({y})' for x,y in zip(results.keys(), additional_x_labels)] if additional_x_labels is not None else results.keys()
-    
-
-    handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 1.0), loc='upper left')
-    plt.grid(visible=True, linestyle='--', alpha=0.5)
-
-    plt.tight_layout()
-    
-    
-    
-    # create save dir if it does not exist
-    if save_dir is not None:
-        Path(save_dir).mkdir(parents=True, exist_ok=True)
-        plt.savefig(os.path.join(save_dir, f'budget_vs_acc_noises.png'))
        
       
     return fig
@@ -758,7 +569,7 @@ def img_mask_distribution(
 ######################################################## Common ##################################################################
 
 @torch.no_grad()
-def get_cls_tokens(model, input):
+def get_cls_token_embeddings_at_all_layers(model, input):
     """
     Retrieves the class tokens from the model's output.
 
@@ -794,6 +605,40 @@ def get_cls_tokens(model, input):
 
 
 @torch.no_grad()
+def get_token_embeddings_at_all_layers(model, input):
+    """
+    Retrieves the tokens embeddings at differnt layers.
+
+    Args:
+      model (torch.nn.Module): The model to extract tokens from.
+      input (torch.Tensor): The input tensor to the model.
+
+    Returns:
+      dict: A dictionary mapping exit module name to its output.
+    """
+    
+    num_class_tokens = getattr(model, 'num_class_tokens', 1)
+    if num_class_tokens > 1:
+      raise NotImplementedError('Only one class token is supported at the moment.')
+    
+    # get all layers with a regex
+    all_layers = " ".join(get_graph_node_names(model)[0])
+    pattern = re.compile(r'encoder\.layers\.\d+')
+    matches = list(set(pattern.findall(all_layers)))
+
+    # dictioanry mapping layer name to personal exit name
+    # see https://pytorch.org/vision/main/generated/torchvision.models.feature_extraction.create_feature_extractor.html?highlight=create_feature_extractor#torchvision.models.feature_extraction.create_feature_extractor
+    exit_modules = {layer: f'layer_{i}' for i, layer in enumerate(matches)}
+
+    model = create_feature_extractor(model, exit_modules)
+    out = model(make_batch(input))
+
+    # out is a dictionary mapping exit module name to its output
+    # the class token is the first token of the output
+
+    return out
+
+@torch.no_grad()
 def plot_class_tokens(model, input, save_dir=None, savepath=None):
     """
     Plots the class tokens of a given model and input.
@@ -808,7 +653,7 @@ def plot_class_tokens(model, input, save_dir=None, savepath=None):
     # xor save_dir and savepath
     assert (save_dir is None) != (savepath is None), 'Either save_dir or savepath must be specified, but not both.'
 
-    cls_tokens = get_cls_tokens(model, input)
+    cls_tokens = get_cls_token_embeddings_at_all_layers(model, input)
 
     all_exits = torch.stack(list(cls_tokens.values()))
     data_np = all_exits.squeeze().t().cpu().numpy()
@@ -838,7 +683,7 @@ def plot_class_tokens_distances(model, input, save_dir=None, savepath=None):
     # xor save_dir and savepath
     assert (save_dir is None) != (savepath is None), 'Either save_dir or savepath must be specified, but not both.'
    
-    cls_tokens = get_cls_tokens(model, input)
+    cls_tokens = get_cls_token_embeddings_at_all_layers(model, input)
     all_exits = torch.stack(list(cls_tokens.values()))
 
     # we compute the distance between each pair of class tokens and display it as a heatmap
@@ -861,7 +706,44 @@ def plot_class_tokens_distances(model, input, save_dir=None, savepath=None):
     
     plt.close()
     
+
+
+def plot_token_norms(model, input, save_dir=None, savepath=None):
+    """
+    Plots the norms of the tokens of a given model and input.
+
+    Args:
+        model (torch.nn.Module): The model to visualize.
+        input (torch.Tensor): The input to the model.
+        save_dir (str, optional): The directory to save the plot. Defaults to None.
+        savepath (str, optional): The path to save the plot. Defaults to None.
+    """
+
+    # xor save_dir and savepath
+    assert (save_dir is None) != (savepath is None), 'Either save_dir or savepath must be specified, but not both.'
+
+    cls_tokens = get_token_embeddings_at_all_layers(model, input)
+
+    all_exits = torch.stack(list(cls_tokens.values()))
+    data_np = all_exits.squeeze().norm(dim=-1).t().cpu().numpy()
     
+    plt.imshow(data_np, cmap='viridis', aspect='auto')
+    plt.xlabel('transformer layer')
+    plt.ylabel('dimension')
+
+    # add vertical lines to separate transformer layers
+    for i in range(1, len(cls_tokens)):
+      plt.axvline(x=i - 0.5, color='white', linewidth=2)
+    
+
+    if save_dir is not None:
+      os.makedirs(save_dir, exist_ok=True)
+      plt.savefig(join(save_dir, f'class_tokens_norms.jpg'), dpi=200)
+    elif savepath is not None:
+      plt.savefig(savepath, dpi=100)
+    
+    plt.close()
+
 
 def plot_reconstructed_images(model, images_to_plot, model_transform, visualization_transform):
   model.eval()
@@ -902,24 +784,5 @@ def plot_reconstructed_images(model, images_to_plot, model_transform, visualizat
   return figs
   
   
- 
-
-  
-  
-
-######################################################## Example usage ##################################################################
-
-"""image_path = "no_brain.jpg"
-image = Image.open(image_path)
-transform = transforms.Compose([
-    transforms.Resize((64, 64)),
-    transforms.ToTensor()
-])
-resized_image = transform(image)
-
-expert_distribution(vitmoe, [torch.stack([resized_image, resized_image], dim=0)], image_size=64)
-
-token_distribution(model, [torch.stack([resized_image, resized_image], dim=0)], image_size=64)
-"""
 
 
