@@ -112,7 +112,7 @@ def get_forward_masks(model, incremental=False):
             else:
                 masks[module_name] = (module.mask * previous_mask.ceil()) 
                 previous_mask = masks[module_name]
-    
+
     return masks
 
 

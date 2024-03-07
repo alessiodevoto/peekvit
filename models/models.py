@@ -7,7 +7,7 @@ from .encdecresidualvit import ResidualVisionTransformerWithDecoder
 from .rankvit import RankVisionTransformer
 from .pct import PointCloudTransformer
 from .rankpct import RankPointCloudTransformer
-
+from .batchrankvit import BatchRankVisionTransformer
 
 ###########################################################################################################################
 
@@ -39,7 +39,8 @@ MODELS_MAP = {
     'RankPointCloudTransformer': RankPointCloudTransformer,
     'rankpointcloudtransformer': RankPointCloudTransformer,
 
-
+    'BatchRankVisionTransformer': BatchRankVisionTransformer,
+    'batchrankvisiontransformer': BatchRankVisionTransformer,
 
 }
 

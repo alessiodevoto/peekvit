@@ -6,14 +6,15 @@ from typing import Optional, List, Union
 from abc import ABC
 from torchvision.models.vision_transformer import ViT_B_16_Weights, ViT_B_32_Weights
 
-
 from .blocks import SelfAttention, MLP
  
 """
 Vision Transformer that drops tokens across the batch in training.
 """
 
-# Drop Module
+
+
+# Drop Module TODO
 class DropModule(nn.Module):
     def __init__(self, drop_rate: float):
         super().__init__()
@@ -37,7 +38,6 @@ class BatchRankViTBlock(nn.Module):
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
         
-        
         # Attention block
         self.ln_1 = nn.LayerNorm(hidden_dim)
         self.self_attention = SelfAttention(hidden_dim, num_heads, attention_dropout)
@@ -50,12 +50,15 @@ class BatchRankViTBlock(nn.Module):
         # Drop tokens
         self.drop = False
         self.current_budget = 1.0
-    
+
+        # For visualization
+        self.kept_tokens = None
+
     def drop_tokens(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
-        if not self.training and not self.drop:
-            return input
+        #if not self.training and not self.drop:
+        #    return input
 
         class_token = input[:, 0:1, :]
         input = input[:, 1:, :]
@@ -73,6 +76,9 @@ class BatchRankViTBlock(nn.Module):
 
         # get the number of tokens to mask
         num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
+
+        # for visualization
+        self.kept_tokens = idx[:num_tokens_to_keep]
 
         # drop tokens
         input = input[:, idx[:num_tokens_to_keep], :]
@@ -292,3 +298,13 @@ class BatchRankVisionTransformer(nn.Module):
         for batchrankvitblock in self.encoder.layers:
             if hasattr(batchrankvitblock, 'set_budget'):
                 batchrankvitblock.set_budget(budget)
+
+    def get_masks(self, x: torch.Tensor):
+        y = self.forward(x)
+        kept = torch.arange(x.shape[1])
+        masks = []
+        for rankvitblock in self.encoder.layers:
+            kept = kept[rankvitblock.kept_tokens]
+            masks.append(kept)
+        
+        return masks

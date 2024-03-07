@@ -56,7 +56,7 @@ def validate(
 
     # sanity check that model has budget
     if not hasattr(model, 'set_budget'):
-        print('Model does not have budget, setting to default value 1.1')
+        print('Model does not have budget, setting to default value 1.0')
         budgets = [1.0]
     
     if budgets is None or len(budgets) == 0:
@@ -85,6 +85,8 @@ def validate(
     
     timings_per_budget = defaultdict(dict)
     timings_per_flops = defaultdict(dict)
+
+    flops_per_budget = defaultdict(dict)
 
     metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=model.num_classes).to(device)
 
@@ -148,13 +150,19 @@ def validate(
                 results_per_flops[flops][noise_val] = acc.item()
                 timings_per_budget[budget][noise_val] = images_per_second
                 timings_per_flops[flops][noise_val] = images_per_second
+                flops_per_budget[budget][noise_val] = flops
             else:
                 results_per_budget[budget] = acc.item()
                 results_per_flops[flops] = acc.item()
                 timings_per_budget[budget] = images_per_second
                 timings_per_flops[flops] = images_per_second
+                flops_per_budget[budget] = flops
 
-    logger.log({'flops': results_per_flops, 'budget': results_per_budget, 'timings_flops': timings_per_flops, 'timings_budget': timings_per_budget})
+    logger.log({'flops': results_per_flops, 
+                'budget': results_per_budget, 
+                'timings_flops': timings_per_flops, 
+                'timings_budget': timings_per_budget, 
+                'flops_per_budget': flops_per_budget})
     # print('Results per budget: ', results_per_budget)
     # print('Results per flops: ', results_per_flops)
     return results_per_budget, results_per_flops, timings_per_budget, timings_per_flops
