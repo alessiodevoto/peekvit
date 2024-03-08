@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from typing import Any, List
 import torch
 from datetime import datetime
@@ -42,6 +42,12 @@ def get_model_device(model: torch.nn.Module):
     Retrieves the device of the given model.
     """
     return next(model.parameters()).device
+
+
+def defaultdict_to_dict(d):
+    if isinstance(d, defaultdict):
+        d = {k: defaultdict_to_dict(v) for k, v in d.items()}
+    return d
 
 
 ######################################################## MoEs ##################################################################

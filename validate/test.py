@@ -19,7 +19,7 @@ import hydra
 from pprint import pprint
 import time
 
-from peekvit.utils.utils import load_state, add_noise, make_experiment_directory
+from peekvit.utils.utils import load_state, add_noise, make_experiment_directory, defaultdict_to_dict
 from peekvit.utils.visualize import plot_budget_and_noise_recap, plot_cumulative_budget_recap, plot_budget_recap, plot_timing_recap, plot_cumulative_budget_and_noise_recap
 from peekvit.utils.flops_count import compute_flops
 
@@ -154,6 +154,10 @@ def validate(
                 timings_per_budget[budget] = images_per_second
                 timings_per_flops[flops] = images_per_second
 
+    results_per_budget = defaultdict_to_dict(results_per_budget)
+    results_per_flops = defaultdict_to_dict(results_per_flops)
+    timings_per_budget = defaultdict_to_dict(timings_per_budget)
+    timings_per_flops = defaultdict_to_dict(timings_per_flops)
     logger.log({'flops': results_per_flops, 'budget': results_per_budget, 'timings_flops': timings_per_flops, 'timings_budget': timings_per_budget})
     # print('Results per budget: ', results_per_budget)
     # print('Results per flops: ', results_per_flops)

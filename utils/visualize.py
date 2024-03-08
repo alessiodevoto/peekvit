@@ -15,8 +15,6 @@ from os.path import join
 import numpy as np
 from pathlib import Path
 from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names
-
-
 import wandb
 
 from .utils import make_batch, get_model_device, get_last_forward_gates, get_moes, get_forward_masks, get_learned_thresholds
@@ -81,7 +79,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
       ax.set_ylabel('Accuracy')
       ax.set_title('Budget vs Accuracy')
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-      plt.ylim([0.1, 1.0])
+      plt.ylim([0.4, 1.0])
       plt.savefig(os.path.join(save_dir, f'budget_vs_acc{additional_label}.png'))
 
     if accs_per_flops is not None:
@@ -91,7 +89,7 @@ def plot_budget_recap(accs_per_budget, accs_per_flops, save_dir, additional_labe
       ax.set_ylabel('Accuracy')
       ax.set_title('Flops vs Accuracy')
       plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-      plt.ylim([0.1, 1.0])
+      plt.ylim([0.4, 1.0])
       plt.savefig(os.path.join(save_dir, f'flops_vs_acc{additional_label}.png'))
 
 
@@ -121,7 +119,7 @@ def plot_cumulative_budget_recap(
       save_dir, 
       additional_label="", 
       run_names=None,
-      run_colors=None
+      run_colors=None,
       ):
     
     # we assume maximum 30 colors per plot
@@ -135,7 +133,7 @@ def plot_cumulative_budget_recap(
         ax.set_xlabel('Budget')
         ax.set_ylabel('Accuracy')
         ax.set_title('Budget vs Accuracy')
-        plt.ylim([0.1, 1.0])
+        plt.ylim([0.6, 1.0])
         plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
     
       plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -148,7 +146,7 @@ def plot_cumulative_budget_recap(
         ax.set_xlabel('Flops')
         ax.set_ylabel('Accuracy')
         ax.set_title('Flops vs Accuracy')
-        plt.ylim([0.1, 1.0])
+        plt.ylim([0.6, 1.0])
         plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
       
       plt.legend(run_names or [x.split('/')[-1] for x in run_accs_per_flops.keys()])
@@ -165,7 +163,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.set_title('Noise vs Accuracy across budgets')
           ax.legend()
 
-      plt.ylim([0.1, 1.0])
+      plt.ylim([0.4, 1.0])
       plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
 
       print(accs_per_budget)
@@ -185,7 +183,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.set_ylabel('Accuracy')
           ax.set_title('Budget vs Accuracy across noises')
           ax.legend()
-      plt.ylim([0.1, 1.0])
+      plt.ylim([0.4, 1.0])
       plt.savefig(os.path.join(save_dir, f'noise_vs_budget_vs_acc{additional_label}.png'))
 
 
@@ -197,7 +195,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.set_ylabel('Accuracy')
           ax.set_title('Noise vs Accuracy across flops')
           ax.legend()
-      # plt.ylim([0.4, 0.9])
+      plt.ylim([0.4, 0.9])
       plt.savefig(os.path.join(save_dir, f'flops_vs_noise_vs_acc{additional_label}.png'))
     
     
@@ -248,7 +246,7 @@ def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, add
             ax.set_ylabel('Accuracy')
             ax.set_title('Budget vs Accuracy across Noises')
             # set y range
-            # # plt.ylim([0.1, 1.0])
+            plt.ylim([0.4, 1.0])
     
 
     handles, labels = plt.gca().get_legend_handles_labels()
