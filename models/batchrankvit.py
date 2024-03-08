@@ -166,6 +166,7 @@ class BatchRankVisionTransformer(nn.Module):
         num_registers: int = 0,
         num_class_tokens: int = 1,
         torch_pretrained_weights: Optional[str] = None,
+        timm_pretrained_weights: Optional[List] = None,
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -221,10 +222,19 @@ class BatchRankVisionTransformer(nn.Module):
         
 
         if torch_pretrained_weights is not None:
+            print('Loading torch pretrained weights: ', torch_pretrained_weights)
             from .adapters import adapt_torch_state_dict
-            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict()
+            torch_pretrained_weights = eval(torch_pretrained_weights).get_state_dict(progress=False)
             adapted_state_dict = adapt_torch_state_dict(torch_pretrained_weights, num_classes=num_classes)
             self.load_state_dict(adapted_state_dict, strict=False)
+        elif timm_pretrained_weights is not None:
+            print('Loading timm pretrained weights: ', timm_pretrained_weights)
+            from .adapters import adapt_timm_state_dict
+            model = torch.hub.load(timm_pretrained_weights[0], timm_pretrained_weights[1], pretrained=True)
+            timm_pretrained_weights = model.state_dict()
+            adapted_state_dict = adapt_timm_state_dict(timm_pretrained_weights, num_classes=num_classes)
+            self.load_state_dict(adapted_state_dict, strict=False)
+            del model
 
 
     def _process_input(self, x: torch.Tensor) -> torch.Tensor:
