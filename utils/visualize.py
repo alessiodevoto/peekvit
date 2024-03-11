@@ -164,9 +164,9 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.legend()
 
       plt.ylim([0.4, 1.0])
-      plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.png'))
+      plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.pdf'))
 
-      print(accs_per_budget)
+      #print(accs_per_budget)
       fig, ax = plt.subplots()
       # flip the dictionary so that we have noise as the first key
       results_per_noise = {}
@@ -175,16 +175,16 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
               if noise not in results_per_noise:
                   results_per_noise[noise] = {}
               results_per_noise[noise][budget] = acc
-      print(results_per_noise)
+      #print(results_per_noise)
       # plot the noise vs accuracy
       for noise, results in results_per_noise.items():
-          ax.plot(results.keys(), results.values(), marker='o', label=f'noise {noise}')
+          ax.plot(results.keys(), results.values(), marker='o', label=f'{noise}')
           ax.set_xlabel('Budget')
           ax.set_ylabel('Accuracy')
           ax.set_title('Budget vs Accuracy across noises')
           ax.legend()
       plt.ylim([0.4, 1.0])
-      plt.savefig(os.path.join(save_dir, f'noise_vs_budget_vs_acc{additional_label}.png'))
+      plt.savefig(os.path.join(save_dir, f'noise_vs_budget_vs_acc{additional_label}.pdf'))
 
 
     if accs_per_flops is not None:
@@ -261,7 +261,7 @@ def plot_cumulative_budget_and_noise_recap_old(run_accs_per_flops, save_dir, add
     # create save dir if it does not exist
     if save_dir is not None:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
-        plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc_noises.png'))
+        plt.savefig(os.path.join(save_dir, f'cumulative_budget_vs_acc_noises.pdf'))
        
       
     return fig
@@ -423,6 +423,9 @@ def plot_masked_images(
       # replace non-zero values with 1
       if hard:
         forward_mask = forward_mask.ceil()
+      else:
+        # normalize the mask between 0 and 1
+        forward_mask = (forward_mask - forward_mask.min()) / (forward_mask.max() - forward_mask.min())
       
       if overlay:
         axs[plot_idx,0].imshow(img)
@@ -534,6 +537,9 @@ def img_mask_distribution(
         # print(torch.any(forward_mask >= 0.5))
         # forward_mask = forward_mask.round()
         forward_mask = forward_mask.ceil()
+      else:
+        # normalize the mask between 0 and 1
+        forward_mask = (forward_mask - forward_mask.min()) / (forward_mask.max() - forward_mask.min())
         
       forward_mask = prepare_for_matplotlib(forward_mask)
       im = axs[layer_idx+1,0].imshow(forward_mask, vmin=0, vmax=1)

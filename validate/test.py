@@ -42,6 +42,7 @@ def validate(
         noises: List,
         device: torch.device,
         model: torch.nn.Module = None,
+        skip_flops_count: bool = False
         ):
     
 
@@ -129,18 +130,19 @@ def validate(
             
 
             flops = 0    
-            # move_dataset_to_device(flops_loader, device)        
-            for batch, labels in tqdm(flops_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
-                batch, labels = batch.to(device), labels.to(device)
-                num_flops, num_params = compute_flops(
-                    model, 
-                    batch,
-                    as_strings=False,
-                    verbose=False,
-                    print_per_layer_stat=False,
-                    flops_units='Mac'
-                    )
-                flops += num_flops
+            # move_dataset_to_device(flops_loader, device)
+            if not skip_flops_count:        
+                for batch, labels in tqdm(flops_loader, desc=f'Counting flops for epoch {epoch} with budget {budget}'):
+                    batch, labels = batch.to(device), labels.to(device)
+                    num_flops, num_params = compute_flops(
+                        model, 
+                        batch,
+                        as_strings=False,
+                        verbose=False,
+                        print_per_layer_stat=False,
+                        flops_units='Mac'
+                        )
+                    flops += num_flops
             flops /= len(flops_loader.dataset)        
 
             if noise_val is not None:
@@ -249,6 +251,7 @@ def test(cfg: DictConfig):
             noises=cfg.test.noises,
             device=device,
             model=model,
+            skip_flops_count=cfg.test.skip_flops_count
             )
         
         # these might be {flops/budget : {noise : acc} or {flops/budget : acc}
