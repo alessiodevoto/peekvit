@@ -163,7 +163,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.set_title('Noise vs Accuracy across budgets')
           ax.legend()
 
-      plt.ylim([0.4, 1.0])
+      plt.ylim([0.0, 1.0])
       plt.savefig(os.path.join(save_dir, f'budget_vs_noise_vs_acc{additional_label}.pdf'))
 
       #print(accs_per_budget)
@@ -183,7 +183,7 @@ def plot_budget_and_noise_recap(accs_per_budget, accs_per_flops, save_dir, addit
           ax.set_ylabel('Accuracy')
           ax.set_title('Budget vs Accuracy across noises')
           ax.legend()
-      plt.ylim([0.4, 1.0])
+      plt.ylim([0.0, 1.0])
       plt.savefig(os.path.join(save_dir, f'noise_vs_budget_vs_acc{additional_label}.pdf'))
 
 

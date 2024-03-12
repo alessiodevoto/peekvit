@@ -274,7 +274,7 @@ def get_checkpoint_path(experiment_dir, epoch='last'):
         print('No checkpoints found in the experiment directory.')
         return None
     
-    print('Available checkpoints for this experiment: ', available_checkpoints)
+    print('Available checkpoints for this experiment: ', sorted(available_checkpoints))
 
     if epoch is None or epoch == 'last':
         checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
