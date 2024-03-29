@@ -83,6 +83,7 @@ def validate(
     # this will be a dict of dicts. {budget_or_flops : {noise_value : accuracy}}
     results_per_budget = defaultdict(dict)
     results_per_flops = defaultdict(dict)
+    sparsities_per_budget = defaultdict(dict)
     
     timings_per_budget = defaultdict(dict)
     timings_per_flops = defaultdict(dict)
@@ -97,6 +98,7 @@ def validate(
 
         results_per_budget[budget] = {}
         timings_per_budget[budget] = {}
+        sparsities_per_budget[budget] = {}
 
         if hasattr(model, 'set_budget'):
             model.set_budget(budget)
@@ -147,6 +149,12 @@ def validate(
             flops /= len(flops_loader.dataset)  
             print('Flops: ', flops) 
 
+                # account for number of batches in average sparsity
+            for module in model.modules():
+                if hasattr(module, 'avg_sparsity'):
+                    module.avg_sparsity = module.avg_sparsity / len(flops_loader)
+            sparsities = {mdodule_name: module.avg_sparsity.item() for mdodule_name, module in model.named_modules() if hasattr(module, 'avg_sparsity') and module.avg_sparsity.item() != 0}
+
             if noise_val is not None:
                 results_per_budget[budget][noise_val] = acc.item()
                 results_per_flops[flops][noise_val] = acc.item()
@@ -157,15 +165,18 @@ def validate(
                 results_per_flops[flops] = acc.item()
                 timings_per_budget[budget] = images_per_second
                 timings_per_flops[flops] = images_per_second
+                sparsities_per_budget[budget] = sparsities
+
 
     results_per_budget = defaultdict_to_dict(results_per_budget)
     results_per_flops = defaultdict_to_dict(results_per_flops)
     timings_per_budget = defaultdict_to_dict(timings_per_budget)
     timings_per_flops = defaultdict_to_dict(timings_per_flops)
-    logger.log({'flops': results_per_flops, 'budget': results_per_budget, 'timings_flops': timings_per_flops, 'timings_budget': timings_per_budget})
+    sparsities_per_budget = defaultdict_to_dict(sparsities_per_budget)
+    logger.log({'flops': results_per_flops, 'budget': results_per_budget, 'timings_flops': timings_per_flops, 'timings_budget': timings_per_budget, 'sparsities_per_budget': sparsities_per_budget})
     # print('Results per budget: ', results_per_budget)
     # print('Results per flops: ', results_per_flops)
-    return results_per_budget, results_per_flops, timings_per_budget, timings_per_flops
+    return results_per_budget, results_per_flops, timings_per_budget, timings_per_flops, sparsities_per_budget
 
 
 
@@ -243,7 +254,7 @@ def test(cfg: DictConfig):
             raise ValueError('No local checkpoint found and no model provided in the config file.')
 
         # validate
-        results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops = validate(
+        results_per_budget, results_per_flops, timings_per_budgets, timings_per_flops, sparsities_per_budget = validate(
             model_checkpoint_path, 
             logger,
             val_loader, 
@@ -302,6 +313,8 @@ def test(cfg: DictConfig):
             f.write(str(dict(all_results_per_budget)))
             f.write('\nResults per flops: \n')
             f.write(str(dict(all_results_per_flops)))
+            f.write('\nSparsities per budget:\n')
+            f.write(str(dict(sparsities_per_budget)))
         
 
         # noises = cfg.test.noises

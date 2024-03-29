@@ -36,7 +36,7 @@ def res_linear_flops_counter_hook(module, input, output):
         module.avg_sparsity = torch.tensor(0.)  #count_masked_tokens(input, per_sequence=False)
     else:
         masked_tokens = count_masked_tokens(input, per_sequence=False)
-        module.avg_sparsity = module.avg_sparsity + masked_tokens.to(module.avg_sparsity.device)
+        module.avg_sparsity = module.avg_sparsity + masked_tokens.to(module.avg_sparsity.device) /  (input.shape[0] * input.shape[1])
     
 
 # this is standard the hook for a standard multihead attention layer:
@@ -142,7 +142,7 @@ def res_multihead_attention_counter_hook(multihead_attention_module, input, outp
     if not hasattr(multihead_attention_module, 'avg_sparsity'):
         multihead_attention_module.avg_sparsity = torch.tensor(0.) #count_masked_tokens(q, per_sequence=False) 
     else: 
-        multihead_attention_module.avg_sparsity = multihead_attention_module.avg_sparsity + num_masked_tokens.to(multihead_attention_module.avg_sparsity.device)
+        multihead_attention_module.avg_sparsity = multihead_attention_module.avg_sparsity + num_masked_tokens.to(multihead_attention_module.avg_sparsity.device) / (q.shape[0] * q.shape[1])
 
 
 
