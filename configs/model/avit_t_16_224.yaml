@@ -1,4 +1,4 @@
-_target_:  peekvit.models.avit.AdaptiveVisionTransformer
+_target_:  peekvit.models.adavit.AdaptiveVisionTransformer
 image_size: 224
 patch_size: 16
 num_layers: 12
@@ -6,4 +6,7 @@ hidden_dim: 192
 mlp_dim: 768
 num_heads: 3
 num_classes: ${dataset.num_classes}
-timm_pretrained_weights: ['facebookresearch/deit:main', 'deit_tiny_patch16_224']
+eps: 0.01
+gate_scale: 10 #10
+gate_center: 5 #30
+timm_pretrained_weights: ['facebookresearch/deit:main', 'deit_tiny_patch16_224'] #/home/aledev/projects/peekvit-workspace/adavit_pretrained_weights/a-vit-weights/tiny-10-30.pth

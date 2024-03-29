@@ -7,8 +7,8 @@ classification_loss:
 additional_losses:
     distr_prior_loss:
         _target_:  peekvit.utils.losses.AViTDPriorLoss
-        target_depth: 7
-        weight: 0.1
+        target_depth: 11
+        weight: 0.2
     ponder_loss:
         _target_:  peekvit.utils.losses.AViTPonderLoss
         weight: 0.0005

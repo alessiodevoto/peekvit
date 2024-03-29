@@ -1,12 +1,14 @@
 train_batch_size: 128
-eval_batch_size: 128
+eval_batch_size: 256
 clip_grad_norm: 1.0
-num_epochs: 100
-eval_every: 10                    # -1 for no evaluation
+num_epochs: 40
+eval_every: 3                    # -1 for no evaluation
 checkpoint_every: 10              # -1 for no checkpointing
-plot_masks_every: 10              # -1 for no plotting
-num_images_to_plot: 10
-reinit_class_tokens: True         # reinitialize class tokens before training
+plot_masks_every: 3              # -1 for no plotting
+num_images_to_plot: 5
+reinit_class_tokens: False        # reinitialize class tokens before training
 train_backbone: False             # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
 num_workers: 28
-val_budgets: [0.2, 0.8]           # budgets to use during validation
+train_budget: null                # budget to use during training (null for no budget). Notice that some residual models do not support budget training.
+val_budgets: [0.1, 1]             # budgets to use during validation
+remove_layers: []                 # list of layers to remove from the backbone

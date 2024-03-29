@@ -11,6 +11,8 @@ gate_temp: 1
 add_input: False
 gate_type: 'sigmoid'
 gate_threshold: 0.5
-gate_bias: 0.5
+gate_bias: 2
 add_budget_token: 'learnable' 
-# budget_interval: [0.5, 1]
+timm_pretrained_weights: ['facebookresearch/deit:main', 'deit_tiny_patch16_224']
+#torch_pretrained_weights: /home/aledev/projects/peekvit-workspace/peekvit/runs/2024-02-13-10-50-42-deit_t_16-imagenette/checkpoints/epoch_004.pth
+#budget_interval: [0.2, 1]

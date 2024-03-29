@@ -7,7 +7,8 @@ classification_loss:
 additional_losses:
     mse:
         _target_:  peekvit.utils.losses.MSELoss
-        weight: 0.1
-        strict: True
+        weight: 0.01
+        strict: False
         budget: null
-        skip_layers: []
+        per_layer: False
+        skip_layers: [0,1,2,3,4,5,7,8,9,10,11]
