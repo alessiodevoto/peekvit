@@ -143,7 +143,9 @@ def validate(
                         flops_units='Mac'
                         )
                     flops += num_flops
-            flops /= len(flops_loader.dataset)        
+            
+            flops /= len(flops_loader.dataset)  
+            print('Flops: ', flops) 
 
             if noise_val is not None:
                 results_per_budget[budget][noise_val] = acc.item()
