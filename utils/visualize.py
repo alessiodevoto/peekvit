@@ -11,6 +11,7 @@ from tqdm import tqdm
 from plotly import graph_objects as go
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from os.path import join
 import numpy as np
 from pathlib import Path
@@ -35,6 +36,13 @@ def hashcolor(s):
     hash_value = hash(str(s))
     color = plt.cm.tab10(hash_value % 10)   # Use viridis colormap, but you can choose any colormap
     return color
+
+
+
+def color_name_to_rgb(color_name):
+    # Convert color name to RGB format
+    rgb = mcolors.to_rgb(color_name)
+    return np.array(rgb).reshape(3, 1)  # Reshape to [r],[g],[b] format
 
 ######################################################## Utils ##################################################################
 
@@ -368,7 +376,8 @@ def display_expert_embeddings(model, save_dir):
 
 ######################################################## Residual ##################################################################
 
-@torch.no_grad()
+
+  # Rest of the code...
 def plot_masked_images(
    model, 
    images, 
@@ -377,7 +386,23 @@ def plot_masked_images(
    hard=True,
    skip_layers: List[int] = [],
    overlay: bool = False,
+   masked_region_color: str = 'black',
    ):
+  """
+  Plots masked images for visualization.
+
+  Args:
+    model (nn.Module): The model used for inference.
+    images (List[Tuple[torch.Tensor, int]]): A list of tuples containing the images and their corresponding labels.
+    model_transform (Callable, optional): A function to transform the input images before passing them to the model. Defaults to None.
+    visualization_transform (Callable, optional): A function to transform the images for visualization. Defaults to None.
+    hard (bool, optional): Whether to use hard masks (1s and 0s) or normalized masks (between 0 and 1). Defaults to True.
+    skip_layers (List[int], optional): A list of layer indices to skip when plotting. Defaults to [].
+    overlay (bool, optional): Whether to overlay the masks on the original images. Defaults to False.
+
+  Returns:
+    dict: A dictionary containing the plotted figures, with keys in the format 'mask_{index}'.
+  """
   model.eval()
   device = get_model_device(model)
   num_registers = getattr(model, 'num_registers', 0) 
@@ -429,9 +454,19 @@ def plot_masked_images(
       
       if overlay:
         axs[plot_idx,0].imshow(img)
-        
-      forward_mask = prepare_for_matplotlib(forward_mask)
-      im = axs[plot_idx,0].imshow(forward_mask, vmin=0, vmax=1, alpha=0.1 if overlay else 1, cmap='Reds' if overlay else 'viridis')
+
+      if overlay:
+        from einops import repeat
+        assert model.patch_size, 'Patch size must be defined in the model to plot images with overlay.'
+        forward_mask = repeat(forward_mask,'batch h w -> batch (h x)(w y)', x=model.patch_size, y=model.patch_size)
+        masked_image = img.copy()
+        masked_image = masked_image.transpose(2,0,1)
+        # to change the color of the masked region, change here 
+        masked_image[:, forward_mask.cpu().squeeze() == 0] = color_name_to_rgb(masked_region_color)
+        im = axs[plot_idx,0].imshow(masked_image.transpose(1,2,0))
+      else:
+        forward_mask = prepare_for_matplotlib(forward_mask)
+        im = axs[plot_idx,0].imshow(forward_mask, vmin=0, vmax=1, alpha=0.1 if overlay else 1, cmap='Reds' if overlay else 'viridis')
 
       
       

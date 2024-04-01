@@ -88,13 +88,15 @@ def test(cfg: DictConfig):
                             images_to_plot,
                             visualization_transform=dataset.denormalize_transform,
                             hard=hard_mask,
-                            skip_layers=cfg.test.skip_layers_for_masks or []
+                            skip_layers=cfg.test.skip_layers_for_masks or [],
+                            overlay=cfg.test.overlay_mask_on_image,
+                            masked_region_color=cfg.test.masked_region_color,
                         )
             
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}', exist_ok=True)
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
-                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
+                img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{cfg.test.masked_region_color}_{hard_prefix}{subset_idcs[i]}.png')
 
      
 
