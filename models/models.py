@@ -8,7 +8,7 @@ from .rankvit import RankVisionTransformer
 from .pct import PointCloudTransformer
 from .rankpct import RankPointCloudTransformer
 from .adavit import AdaptiveVisionTransformer
-
+from .dropvit import DropVisionTransformer
 
 ###########################################################################################################################
 
@@ -30,6 +30,9 @@ MODELS_MAP = {
     'eeResidualvit': EEResidualVisionTransformer,
 
     'ResidualVisionTransformerWithDecoder': ResidualVisionTransformerWithDecoder,
+
+    'DropVisionTransformer': DropVisionTransformer,
+    'dropVisionTransformer': DropVisionTransformer,
 
     'RankingVisionTransformer': RankVisionTransformer,
     'RankVisionTransformer': RankVisionTransformer,
