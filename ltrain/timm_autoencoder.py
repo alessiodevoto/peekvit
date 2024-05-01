@@ -186,8 +186,8 @@ def make_vision_decoder(transformer_class):
             #x = self.patch_embed(x)
             # Get rid of CLS token
             # x = self._pos_embed(x)
-            x = self.patch_drop(x)
-            x = self.norm_pre(x)
+            # x = self.patch_drop(x)
+            # x = self.norm_pre(x)
             x = self.blocks(x)
             x = self.norm(x)
             return x

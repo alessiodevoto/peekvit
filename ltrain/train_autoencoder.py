@@ -337,6 +337,7 @@ def plot_reconstructed_images(
 
     return figs
 
+
 from scipy.ndimage import binary_erosion
 import numpy as np
 def make_mask_visualization(
