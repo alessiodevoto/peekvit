@@ -1,0 +1,3 @@
+noise_type: 'token_drop'
+layer: 2            # this is the layer where the noise is added
+prob: 0.1           # probability of dropping a token, can also be set at runtime, see blocks.py

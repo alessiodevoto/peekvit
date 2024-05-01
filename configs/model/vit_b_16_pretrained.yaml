@@ -1,0 +1,10 @@
+_target_: peekvit.models.vit.VisionTransformer
+num_classes: ${dataset.num_classes}
+image_size: ${dataset.image_size}
+patch_size: 16
+hidden_dim: 768
+mlp_dim: 3072
+num_layers: 12
+num_heads: 12
+torch_pretrained_weights: ViT_B_16_Weights['IMAGENET1K_V1']
+# see other weights here: https://github.com/pytorch/vision/blob/81e2831a5509c1f2989b8f4bb25f40f7c9ee93ea/torchvision/models/vision_transformer.py#L351
