@@ -74,6 +74,11 @@ class BatchRankViTBlock(nn.Module):
         # get sorted indices
         idx = torch.argsort(avg_magnitudes, descending=True)
 
+        # get sorted indices per token 
+        idx = torch.argsort(token_magnitudes, descending=True, dim=1)
+        
+        #idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])
+        
         # get the number of tokens to mask
         num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
 
@@ -81,8 +86,8 @@ class BatchRankViTBlock(nn.Module):
         self.kept_tokens = idx[:num_tokens_to_keep]
 
         # drop tokens
-        input = input[:, idx[:num_tokens_to_keep], :]
-
+        input = input[idx[:num_tokens_to_keep]]
+        #input = input.gather(1, idx[:,:num_tokens_to_keep,:])
         # add class token back
         input = torch.cat([class_token, input], dim=1)
 
