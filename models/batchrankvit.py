@@ -32,6 +32,7 @@ class BatchRankViTBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
+        drop_mode: str = "batch",
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -50,6 +51,7 @@ class BatchRankViTBlock(nn.Module):
         # Drop tokens
         self.drop = False
         self.current_budget = 1.0
+        self.drop_mode = drop_mode
 
         # For visualization
         self.kept_tokens = None
@@ -67,27 +69,58 @@ class BatchRankViTBlock(nn.Module):
         # (batch_size, seq_length, hidden_dim) -> (batch_size, seq_length)
         token_magnitudes = torch.norm(input, dim=-1)
 
-        # average over batch
-        # (batch_size, seq_length) -> (seq_length)
-        avg_magnitudes = torch.mean(token_magnitudes, dim=0)
-
-        # get sorted indices
-        idx = torch.argsort(avg_magnitudes, descending=True)
-
-        # get sorted indices per token 
-        idx = torch.argsort(token_magnitudes, descending=True, dim=1)
-        
-        #idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])
-        
         # get the number of tokens to mask
         num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
 
-        # for visualization
-        self.kept_tokens = idx[:num_tokens_to_keep]
+        # average over batch
+        # (batch_size, seq_length) -> (seq_length)
+        if self.drop_mode == "batch": #ALL BATCH
+            avg_magnitudes = torch.mean(token_magnitudes, dim=0)            #b
 
-        # drop tokens
-        input = input[idx[:num_tokens_to_keep]]
-        #input = input.gather(1, idx[:,:num_tokens_to_keep,:])
+            # get sorted indices
+            idx = torch.argsort(avg_magnitudes, descending=True)            #b
+
+            # for visualization 
+            self.kept_tokens = idx[:num_tokens_to_keep]                     #b
+            
+            input = input[:,idx[:num_tokens_to_keep]]                       #b
+
+        elif self.drop_mode == "single": #SINGLE TOKEN
+            # get sorted indices per token 
+            idx = torch.argsort(token_magnitudes, descending=True, dim=1)  #a
+        
+            idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])          #a
+            input = input.gather(1, idx[:,:num_tokens_to_keep,:])          #a
+
+        elif self.drop_mode == "attention": #ATTENTION RANKING
+            #get sorted indices per token by attention score with class token
+            full_input = torch.cat([class_token, input], dim=1)
+            _, attention_scores = self.self_attention(full_input, need_weights=True)             #c
+            attention_scores = attention_scores[:,0,1:]                    #c
+            idx = torch.argsort(attention_scores, descending=True, dim=1)  #c
+            idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])          #c
+            input = input.gather(1, idx[:,:num_tokens_to_keep,:])          #c
+
+        elif self.drop_mode == "random": #RANDOM RANKING FOR EACH IMAGE
+            # get random indices per token
+            rand_magnitudes = torch.randn_like(token_magnitudes)           #d
+            idx = torch.argsort(rand_magnitudes, descending=True, dim=1)   #d
+            idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])          #d
+            input = input.gather(1, idx[:,:num_tokens_to_keep,:])          #d
+
+        elif self.drop_mode == "ranklatte": #LATTE
+            # get sorted indices per token 
+            idx = torch.argsort(token_magnitudes, descending=True, dim=1)  #e
+        
+            idx = idx.unsqueeze(-1).repeat(1, 1, input.shape[-1])          #e
+            #return indexes of tokens to keep and indexes of tokens to drop
+            return idx[:,:num_tokens_to_keep, :], idx[:, num_tokens_to_keep:, :]       #e
+
+            
+        else:
+            raise ValueError(f"Unknown drop mode {self.drop_mode}")
+
+        # drop tokens #b
         # add class token back
         input = torch.cat([class_token, input], dim=1)
 
@@ -97,9 +130,15 @@ class BatchRankViTBlock(nn.Module):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
         # notice that drop_tokens is implemented as no-op if sort_tokens is False
-        input = self.drop_tokens(input) # only has effect during training
+        if self.drop_mode == "ranklatte":
+            good_idxs, bad_idxs = self.drop_tokens(input)
+            
+        else:
+            input = self.drop_tokens(input) # only has effect during training
 
         x = self.ln_1(input)
+        if self.drop_mode == "ranklatte":
+            pass
         x = self.self_attention(x)
         x = self.dropout(x)
         x = x + input
@@ -125,6 +164,7 @@ class BatchRankViTEncoder(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
+        drop_mode: str = None,
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -139,6 +179,7 @@ class BatchRankViTEncoder(nn.Module):
                             mlp_dim,
                             dropout,
                             attention_dropout,
+                            drop_mode
                             ))
 
         self.layers = nn.Sequential(*layers)
@@ -172,6 +213,8 @@ class BatchRankVisionTransformer(nn.Module):
         num_class_tokens: int = 1,
         torch_pretrained_weights: Optional[str] = None,
         timm_pretrained_weights: Optional[List] = None,
+        drop_mode: str = None,
+
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -209,7 +252,8 @@ class BatchRankVisionTransformer(nn.Module):
             hidden_dim,
             mlp_dim,
             dropout,
-            attention_dropout
+            attention_dropout,
+            drop_mode
             )
 
 

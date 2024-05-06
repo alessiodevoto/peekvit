@@ -37,11 +37,7 @@ def train(cfg: DictConfig):
     experiment_dir, checkpoints_dir = make_experiment_directory(experiment_dir)
     
     
-    # logger
-    config_dict = OmegaConf.to_container(cfg, resolve=True)
-    pprint(config_dict)
-    logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir)
-    
+
 
     # dataset and dataloader
     training_args = cfg.training
@@ -54,53 +50,10 @@ def train(cfg: DictConfig):
     model = instantiate(cfg.model)
     model.to(device)
 
-    # load from checkpoint if requested
-    load_from = cfg.load_from
-    if load_from is not None:
-        # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
-        load_from = load_from if load_from.endswith('.pth') else get_checkpoint_path(load_from)
-        print('Loading model from checkpoint: ', load_from)
-        model, _, _, _, _ = load_state(load_from, model=model)
-    
-    # edit model here if requested
-    if training_args['reinit_class_tokens']:
-        model = reinit_class_tokens(model)
-    
-
-    if training_args['remove_layers']:
-        model = remove_layers_and_stitch(model, training_args['remove_layers'])
-        
-    
-
-    # main loss 
-    main_criterion = instantiate(cfg.loss.classification_loss)
-    
-    # we might have N additional losses
-    # so we store the in a dictionary
-    additional_losses = None
-    if cfg.loss.additional_losses is not None:
-        additional_losses = LossCompose(cfg.loss.additional_losses)
-        
-    # metrics
-    metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
-
-    # optimizer and scheduler
-    optimizer = instantiate(cfg.optimizer, params=model.parameters())
-    scheduler = None
-    if 'scheduler' in cfg:
-        scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
-
-    if 'train_budget' in training_args:
-        if not hasattr(model, 'set_budget'):
-            print('[WARNING] Model does not have a budget attribute. Ignoring train_budget...')
-        else:
-            print('Setting budget to ', training_args['train_budget'])
-            model.set_budget(training_args['train_budget'])
-            if hasattr(model, 'enable_ranking'):
-                model.enable_ranking(True)
+    ckpt_folder = cfg.ckpt_folder
 
     # training loop
-    def train_epoch(model, loader, optimizer, epoch):
+    def train_epoch(model, loader, optimizer, epoch, ckpt):
         model.train()
         if not training_args['train_backbone']:
             model = train_only_these_params(model, ['gate', 'class', 'head', 'threshold', 'budget'], verbose=epoch==0)
@@ -142,7 +95,7 @@ def train(cfg: DictConfig):
             if training_args['clip_grad_norm'] is not None:
                 clip_grad_norm_(model.parameters(), max_norm=training_args['clip_grad_norm'])
             optimizer.step()
-            logger.log({'train/total_loss': loss.detach().item(), 'train/classification_loss': main_loss.detach().item()} | add_loss_dict)
+            logger.log({'train/total_loss': loss.detach().item(), 'ckpt_{ckpt}/train/classification_loss': main_loss.detach().item()} | add_loss_dict)
         
         if scheduler:
             logger.log({'train/lr': scheduler.get_last_lr()[0]})
@@ -168,17 +121,17 @@ def train(cfg: DictConfig):
 
     # validation loop
     @torch.no_grad()
-    def validate(model, loader, epoch):
+    def validate(model, loader, epoch, ckpt):
         model.eval()
         val_budgets = cfg.training.val_budgets or [1.]
         if hasattr(model, 'set_budget'):
             for budget in val_budgets:
                 model.set_budget(budget)
                 acc, val_loss = validate_epoch(model, loader, epoch, budget=f'budget_{budget}')
-                logger.log({f'budget_{budget}/val/accuracy': acc, f'budget_{budget}/val/loss': val_loss})
+                logger.log({f'budget_{budget}/val/accuracy': acc, f'ckpt_{ckpt}/budget_{budget}/val/loss': val_loss})
         else:
             acc, val_loss = validate_epoch(model, loader, epoch)
-            logger.log({'val/accuracy': acc, 'val/loss': val_loss})
+            logger.log({'val/accuracy': acc, 'ckpt_{ckpt}/val/loss': val_loss})
         
         return acc, val_loss
 
@@ -207,27 +160,81 @@ def train(cfg: DictConfig):
             os.makedirs(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}', exist_ok=True)
             for i, (_, img) in enumerate(images.items()):
                 img.savefig(f'{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png')
-        
-        
     
-    logger.watch(model)
-    # Training
-    for epoch in range(training_args['num_epochs']+1):
+    # logger
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    pprint(config_dict)
+    
+    for ckpt in os.listdir(ckpt_folder):
+    
+        exp_name = "ckpt_" + ckpt.split('.')[0] + "_batchrankvit"
+        logger = instantiate(cfg.logger, settings=str(config_dict), dir=experiment_dir, wandb_run=exp_name, reinit=True)
 
-        train_epoch(model, train_loader, optimizer, epoch)
         
-        if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
-            validate(model, val_loader, epoch)
+        # load from checkpoint if requested
+        load_from = ckpt_folder + '/' + ckpt
+        if load_from is not None:
+            # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
+            load_from = load_from if load_from.endswith('.pth') else get_checkpoint_path(load_from)
+            print('Loading model from checkpoint: ', load_from)
+            model, _, _, _, _ = load_state(load_from, model=model)
+        
+        # edit model here if requested
+        if training_args['reinit_class_tokens']:
+            model = reinit_class_tokens(model)
+        
+
+        if training_args['remove_layers']:
+            model = remove_layers_and_stitch(model, training_args['remove_layers'])
             
-        if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
-            save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
         
-        if training_args['plot_masks_every'] != -1 and epoch % training_args['plot_masks_every'] == 0:
-            if hasattr(model, 'set_budget'):
-                plot_masks_in_training(model, cfg.training.val_budgets)
+
+        # main loss 
+        main_criterion = instantiate(cfg.loss.classification_loss)
+        
+        # we might have N additional losses
+        # so we store the in a dictionary
+        additional_losses = None
+        if cfg.loss.additional_losses is not None:
+            additional_losses = LossCompose(cfg.loss.additional_losses)
+            
+        # metrics
+        metric = torchmetrics.classification.Accuracy(task="multiclass", num_classes=cfg.model.num_classes).to(device)
+
+        # optimizer and scheduler
+        optimizer = instantiate(cfg.optimizer, params=model.parameters())
+        scheduler = None
+        if 'scheduler' in cfg:
+            scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
+
+        if 'train_budget' in training_args:
+            if not hasattr(model, 'set_budget'):
+                print('[WARNING] Model does not have a budget attribute. Ignoring train_budget...')
             else:
-                print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
+                print('Setting budget to ', training_args['train_budget'])
+                model.set_budget(training_args['train_budget'])
+                if hasattr(model, 'enable_ranking'):
+                    model.enable_ranking(True)
+
+        logger.watch(model)
+            # Training
+        for epoch in range(training_args['num_epochs']):
+
+            train_epoch(model, train_loader, optimizer, epoch, ckpt)
             
+            if training_args['eval_every'] != -1 and epoch % training_args['eval_every'] == 0:
+                validate(model, val_loader, epoch, ckpt)
+                
+            if training_args['checkpoint_every'] != -1 and epoch % training_args['checkpoint_every'] == 0:
+                save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
+            
+            if training_args['plot_masks_every'] != -1 and epoch % training_args['plot_masks_every'] == 0:
+                if hasattr(model, 'set_budget'):
+                    plot_masks_in_training(model, cfg.training.val_budgets)
+                else:
+                    print('[WARNING] Plotting masks is only supported for models with a budget. Skipping...')
+            
+
 
 
 

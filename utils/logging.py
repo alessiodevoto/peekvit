@@ -32,7 +32,7 @@ class WandbLogger:
     """
     Logger for logging to wandb.
     """
-    def __init__(self, wandb_entity, wandb_project, settings, dir=None, wandb_run=None):
+    def __init__(self, wandb_entity, wandb_project, settings, dir=None, wandb_run=None, reinit=True):
         self.entity = wandb_entity
         self.project = wandb_project
         self.wandb_run = wandb_run
@@ -45,10 +45,14 @@ class WandbLogger:
             config=self.config,
             name=wandb_run,
             dir=dir,
+            reinit=reinit,
         )
     
     def log(self, dict_to_log):
         wandb.log(dict_to_log)
+
+    def watch(self, model):
+        wandb.watch(model, log="all")
     
     def close(self):
         wandb.finish()
