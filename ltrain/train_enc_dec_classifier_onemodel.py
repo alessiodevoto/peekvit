@@ -31,7 +31,7 @@ from peekvit.utils.losses import LossCompose
 from peekvit.utils.visualize import *
 import timm 
 import tome
-from timm_enc_dec_classifier import *
+from timm_enc_dec_classifier_onemodel import *
 import torch
 
 @hydra.main(
@@ -168,7 +168,7 @@ def train(cfg: DictConfig):
             #         channel_budget=getattr(model, "current_channel_budget", None),
             #         dict_prefix="train/",
             #     )
-            loss = reconstruction_loss + classification_loss # + add_loss_val
+            loss = reconstruction_loss + classification_loss# + add_loss_val
             loss.backward()
             # Apply gradient clipping
             if training_args["clip_grad_norm"] is not None:
