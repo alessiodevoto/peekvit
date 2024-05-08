@@ -31,12 +31,13 @@ from peekvit.utils.losses import LossCompose
 from peekvit.utils.visualize import *
 import timm 
 import tome
-from timm_enc_dec_classifier import *
+from timm_classifier import *
 import torch
 
 @hydra.main(
     version_base=None, config_path="../configs", config_name="train_config_personal"
 )
+
 
 def train(cfg: DictConfig):
     torch.set_num_threads(1)
@@ -91,7 +92,7 @@ def train(cfg: DictConfig):
         model = reinit_class_tokens(model)
 
     # Main loss
-    #main_criterion = instantiate(cfg.loss.classification_loss)
+    main_criterion = instantiate(cfg.loss.classification_loss)
 
     # we might have N additional losses
     # so we store the in a dictionary
@@ -100,8 +101,8 @@ def train(cfg: DictConfig):
         additional_losses = LossCompose(cfg.loss.additional_losses)
 
     # metrics
-    metric_mse = torchmetrics.MeanMetric().to(device)
-    metric_cl_loss = torchmetrics.MeanMetric().to(device)
+    metric = torchmetrics.MeanMetric().to(device)
+    
     metric_acc = torchmetrics.classification.Accuracy(
         task="multiclass", num_classes=cfg.encoder.num_classes
     ).to(device)
@@ -112,30 +113,6 @@ def train(cfg: DictConfig):
     if "scheduler" in cfg:
         scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
-    def plot_reconstructed_images_in_training(model,):
-
-        subset_idcs = torch.arange(
-            0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
-        )
-        images_to_plot = Subset(val_dataset, subset_idcs)
-        
-
-        images = plot_reconstructed_images(
-            model,
-            images_to_plot,
-            model_transform=None,
-            visualization_transform=dataset.denormalize_transform,
-        )
-
-        os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
-        os.makedirs(
-            f"{experiment_dir}/images/epoch_{epoch}/reconstructed",
-            exist_ok=True,
-        )
-        for i, (_, img) in enumerate(images.items()):
-            img.savefig(
-                f"{experiment_dir}/images/epoch_{epoch}/reconstructed/reconstructed_img_{subset_idcs[i]}.png"
-            )
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch):
@@ -147,28 +124,22 @@ def train(cfg: DictConfig):
                 verbose=epoch == 0,
             )
 
-        # if "train_budget" in training_args:
-        #     print("Setting budget to ", training_args["train_budget"])
-        #     model.set_budget(training_args["train_budget"])
-        #     if hasattr(model, "enable_ranking"):
-        #         model.enable_ranking(True)
-
         for batch, labels in tqdm(loader, desc=f"Training epoch {epoch}"):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
 
-            reconstruction_loss, classification_loss = model(batch, labels)
+            main_loss = model(batch, labels)
 
             # main_loss = main_criterion(out, labels)
-            # add_loss_dict, add_loss_val = {}, 0.0
-            # if additional_losses is not None:
-            #     add_loss_dict, add_loss_val = additional_losses.compute(
-            #         model,
-            #         budget=model.current_budget,
-            #         channel_budget=getattr(model, "current_channel_budget", None),
-            #         dict_prefix="train/",
-            #     )
-            loss = reconstruction_loss + classification_loss# + add_loss_val
+            add_loss_dict, add_loss_val = {}, 0.0
+            if additional_losses is not None:
+                add_loss_dict, add_loss_val = additional_losses.compute(
+                    model,
+                    budget=model.current_budget,
+                    channel_budget=getattr(model, "current_channel_budget", None),
+                    dict_prefix="train/",
+                )
+            loss = main_loss + add_loss_val
             loss.backward()
             # Apply gradient clipping
             if training_args["clip_grad_norm"] is not None:
@@ -179,10 +150,9 @@ def train(cfg: DictConfig):
             logger.log(
                 {
                     "train/total_loss": loss.detach().item(),
-                    "train/mse_loss": reconstruction_loss.detach().item(),
-                    "train/classification_loss": classification_loss.detach().item(),
+                    "train/classification_loss": main_loss.detach().item(),
                 }
-                # | add_loss_dict
+                | add_loss_dict
             )
 
         if scheduler:
@@ -192,28 +162,22 @@ def train(cfg: DictConfig):
     @torch.no_grad()
     def validate_epoch(model, loader, epoch, budget=""):
         model.eval()
-        batches_loss_mse, batches_loss_cl = 0, 0
+        batches_loss_cl = 0
         for batch, labels in tqdm(loader, desc=f"Validation epoch {epoch} {budget}"):
             batch, labels = batch.to(device), labels.to(device)
-            val_reconstruction_loss, val_classification_loss, val_class_preds = model(batch, labels, return_pred_labels=True)
-            
+            val_classification_loss, val_class_preds = model(batch, labels, return_pred_labels=True)
+            #val_loss = main_criterion(out, labels)
             #predicted = torch.argmax(out, 1)
-            # metric_mse(val_reconstruction_loss)
-            # metric_cl_loss(val_classification_loss)
-            metric_acc(val_class_preds, labels)
             
-            batches_loss_mse += val_reconstruction_loss.detach().item()
+            metric_acc(val_class_preds, labels)
             batches_loss_cl += val_classification_loss.detach().item()
-
-        # Cost
-        val_loss_mse = batches_loss_mse / len(loader)
+            
         val_loss_cl = batches_loss_cl / len(loader)
-        
-        # Acc metric
-        acc = metric_acc.compute()
-        metric_acc.reset()
 
-        return acc, val_loss_mse, val_loss_cl
+        acc = metric_acc.compute()
+        metric.reset()
+
+        return acc, val_loss_cl
 
     # validation loop
     @torch.no_grad()
@@ -233,44 +197,12 @@ def train(cfg: DictConfig):
                     }
                 )
         else:
-            acc, val_loss_mse, val_loss_cl = validate_epoch(model, loader, epoch)
-            logger.log({"val/mse": val_loss_mse, 
-                        "val/classification_loss": val_loss_cl,
-                        "val/accuracy": acc,
-                        "val/loss": val_loss_mse + val_loss_cl })
+            acc, val_loss_cl = validate_epoch(model, loader, epoch)
+            logger.log({"val/classification_loss": val_loss_cl,
+                        "val/accuracy": acc,})
 
-        return acc, val_loss_mse, val_loss_cl
+        return acc, val_loss_cl
 
-    # Aux function to plot masks during training
-    # Assumes model has budget
-    # def plot_masks_in_training(model, budgets):
-
-    #     subset_idcs = torch.arange(
-    #         0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
-    #     )
-    #     images_to_plot = Subset(val_dataset, subset_idcs)
-    #     hard_prefix = "hard_"
-
-    #     for budget in budgets:
-
-    #         model.set_budget(budget)
-
-    #         images = plot_masked_images(
-    #             model,
-    #             images_to_plot,
-    #             model_transform=None,
-    #             visualization_transform=dataset.denormalize_transform,
-    #             hard=True,
-    #         )
-
-    #         os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
-    #         os.makedirs(
-    #             f"{experiment_dir}/images/epoch_{epoch}/budget_{budget}", exist_ok=True
-    #         )
-    #         for i, (_, img) in enumerate(images.items()):
-    #             img.savefig(
-    #                 f"{experiment_dir}/images/epoch_{epoch}/budget_{budget}/{hard_prefix}{subset_idcs[i]}.png"
-    #             )
 
     # Training
     for epoch in range(training_args["num_epochs"] + 1):
@@ -283,24 +215,9 @@ def train(cfg: DictConfig):
             and epoch % training_args["eval_every"] == 0
         ):
             validate(model, val_loader, epoch)
-            plot_reconstructed_images_in_training(model)
+            
 
-        # if (
-        #     training_args["checkpoint_every"] != -1
-        #     and epoch % training_args["checkpoint_every"] == 0
-        # ):
-        #     save_state(checkpoints_dir, model, cfg.model, cfg.noise, optimizer, epoch)
-
-        # if (
-        #     training_args["plot_masks_every"] != -1
-        #     and epoch % training_args["plot_masks_every"] == 0
-        # ):
-        #     # if hasattr(model, "set_budget"):
-            #     plot_masks_in_training(model, cfg.training.val_budgets)
-            # else:
-            #     print(
-            #         "[WARNING] Plotting masks is only supported for models with a budget. Skipping..."
-            #     )
+    
 
 import matplotlib.pyplot as plt
 def plot_reconstructed_images(
@@ -315,7 +232,7 @@ def plot_reconstructed_images(
 
         # model.set_budget(budget)
         device = model.decoder_pred.weight.device
-        _,_, reconstructed = model(make_batch(_img).to(device), torch.tensor([label]).long().to(device), return_pred_images=True)
+        out, reconstructed = model(make_batch(_img).to(device), return_pred_images=True)
 
         # prepare plot, we want a row for each residual layer,
         # and two columns, one for the image and one for token masks
