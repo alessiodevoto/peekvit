@@ -8,7 +8,9 @@ plot_masks_every: -1              # -1 for no plotting
 num_images_to_plot: 10  
 reinit_class_tokens: False        # reinitialize class tokens before training
 train_backbone: True              # train backbone. If false, only train only head, masking module, budget tokens and class tokens.
-num_workers: 28
+num_workers: 20
 train_budget: null                # budget to use during training (null for no budget). Notice that some residual models do not support budget training.
 val_budgets: null           # budgets to use during validation
 remove_layers: []                 # list of layers to remove from the backbone
+max_token_drop: 0.6
+drop_blocks: [0, 1, 2, 3, 4, 5, 6]

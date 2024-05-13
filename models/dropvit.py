@@ -54,7 +54,6 @@ class DropViTBlock(nn.Module):
         drop_perc = torch.randint(0, int(100 * (0.01 + max_token_drop)), size = (1,)) / 100. # Generates a random number in [0, max_token_drop) - max_token_drop should be at most 1.0
 
         num_kept_tokens = math.floor(input.shape[1] * (1 - drop_perc))
-        
         input = input[:, :num_kept_tokens, :] # Removes the trailing (1 - drop_perc)% tokens
 
         input_after_dropping = torch.cat([class_token, input], dim=1)
@@ -93,6 +92,7 @@ class DropViTEncoder(nn.Module):
         dropout: float,
         attention_dropout: float,
         max_token_drop: float = 1.0,
+        drop_blocks: List[int] = [],
     ):
         super().__init__()
         # Note that batch_size is on the first dim because
@@ -102,7 +102,10 @@ class DropViTEncoder(nn.Module):
         layers: List = []
         for i in range(num_layers):
             
-            drop_enabled = (i == math.floor(num_layers % 2)) # Enables token dropping on 1 layer only, about halfway through the encoder blocks
+            drop_enabled = (i in drop_blocks)
+
+            if drop_enabled:
+                print(f"\n\nToken drop enabled on layer at index {i}\n\n")
 
             layers.append(DropViTBlock(
                             num_heads,
@@ -144,6 +147,7 @@ class DropVisionTransformer(nn.Module):
         dropout: float = 0.0,
         attention_dropout: float = 0.0,
         num_classes: int = 1000,
+        drop_blocks: List[int] = [],
         representation_size: Optional[int] = None,
         num_registers: int = 0,
         num_class_tokens: int = 1,
@@ -188,6 +192,7 @@ class DropVisionTransformer(nn.Module):
         self.num_heads = num_heads
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
+        self.drop_blocks = drop_blocks
         
         self.conv_proj = nn.Conv2d(in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size)
 
@@ -211,6 +216,7 @@ class DropVisionTransformer(nn.Module):
             dropout,
             attention_dropout,
             max_token_drop,
+            drop_blocks,
             )
 
 
@@ -345,3 +351,27 @@ class DropVisionTransformer(nn.Module):
 
         print('Final number of layers:', len(self.encoder.layers))
     
+    def set_drop_blocks_enabled(self, drop_blocks: List[int]):
+        """
+        Enables token drop on the layers specified in the drop_blocks argument.
+
+        Args:
+            drop_blocks (List[int]): List of layers on which you want to enable token dropping.
+        """
+        self.drop_blocks = drop_blocks
+        i = 0
+        for drop_idx in drop_blocks:
+            self.encoder.layers[drop_idx].enable_token_drop = True
+        
+    def set_max_drop(self, max_token_drop: float):
+        """
+        Set a model maximum percentage of dropped tokens. Tokens are dropped up to that value, if
+        the encoder layer also has token dropping enabled.
+
+        Args:
+            max_token_drop (float): Maximum percentage of dropped tokens.
+        """
+        self.max_token_drop = max_token_drop
+
+        for encoder_block in self.encoder.layers:
+            encoder_block.max_token_drop = max_token_drop
