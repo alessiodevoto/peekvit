@@ -31,7 +31,7 @@ except ImportError:
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="train_config_personal")
+@hydra.main(version_base=None, config_path="../configs", config_name="train_config")
 def train(cfg: DictConfig):
 
     torch.manual_seed(cfg.seed)
@@ -69,12 +69,19 @@ def train(cfg: DictConfig):
         print('Loading model from checkpoint: ', load_from)
         model, _, _, _, _ = load_state(load_from, model=model)
     
-    # edit model here if requested
+    # edit model here if requested via the configuration file
     if training_args['reinit_class_tokens']:
         model = reinit_class_tokens(model)
     
     
+    if training_args['drop_blocks'] and hasattr(model, 'set_drop_blocks_enabled'):
+        print("Enabling token drop on encoder layers", training_args.drop_blocks)
+        model.set_drop_blocks_enabled(training_args['drop_blocks'])
 
+    if training_args['max_token_drop'] and hasattr(model, 'set_max_drop'):
+        print("Enabling a max token drop percentage of", training_args.max_token_drop)
+        model.set_max_drop(training_args['max_token_drop'])
+    
     # main loss 
     main_criterion = instantiate(cfg.loss.classification_loss)
     
@@ -102,7 +109,7 @@ def train(cfg: DictConfig):
         if  training_args['train_budget'] and hasattr(model, 'set_budget'):
             print(f'Setting training budget to {training_args["train_budget"]}')
             model.set_budget(training_args['train_budgedt'])
- 
+
         for batch, labels in tqdm(loader, desc=f'Training epoch {epoch}'):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()

@@ -181,7 +181,7 @@ def validate(
 
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="test_config_personal")
+@hydra.main(version_base=None, config_path="../configs", config_name="test_config")
 @torch.no_grad()
 def test(cfg: DictConfig):
 
