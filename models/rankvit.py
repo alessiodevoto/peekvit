@@ -1,3 +1,4 @@
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -11,6 +12,7 @@ import os
 
 
 from .blocks import SelfAttention, MLP
+from .vit import ViTBlock
 from einops import reduce
  
 """
@@ -49,8 +51,8 @@ class RankViTBlock(nn.Module):
         self.sort = False
         self.current_budget = 1.0
     
-    @staticmethod
-    def sort_tokens(input: torch.Tensor):
+  
+    def sort_and_drop(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
         
         class_token = input[:, 0:1, :]
@@ -68,85 +70,22 @@ class RankViTBlock(nn.Module):
         # gather sorted input
         sorted_input = torch.gather(input, dim=1, index=sorted_indices.expand(-1, -1, input.shape[-1]))
 
-        sorted_input = torch.cat([class_token, sorted_input], dim=1)
-        return sorted_input
-    
-
-    def mask_tokens(self, input: torch.Tensor):
-        if not self.training or not self.sort:
-            return input
-
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        # we assume input is sorted in descending order
-        # the last n% tokens are masked by setting them to 0
-        # where n is the current budget
-
-        class_token = input[:, 0:1, :]
-        input = input[:, 1:, :]
-
-        # get the number of tokens to mask
-        # (batch_size, seq_length) -> (batch_size, seq_length)
+        # discard tokens
         num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
+        remaining_tokens = sorted_input[:, :num_tokens_to_keep, :]
 
-        
-        # mask the tokens
-        # (batch_size, seq_length) -> (batch_size, seq_length, 1)
-        mask = torch.zeros_like(input)
-        mask[:, :num_tokens_to_keep, :] = 1
-        
-        # apply the mask
-        # (batch_size, seq_length, hidden_dim) -> (batch_size, seq_length, hidden_dim)
-        masked_input = input * mask
-
-        masked_input = torch.cat([class_token, masked_input], dim=1)
-
-        return masked_input
+        return torch.cat([class_token, remaining_tokens], dim=1)
     
 
-    def drop_tokens(self, input: torch.Tensor, force_drop: bool = False):
-        if not self.sort:
-            return input
-        if self.training and not force_drop:
-            return input
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-        # we assume input is sorted in descending order
-        # the last n% tokens are masked by setting them to 0
-        # where n is the current budget
-
-        num_tokens_to_keep = math.ceil(input.shape[1] * self.current_budget)
-
-        return input[:, :num_tokens_to_keep, :]
     
-
-    """"def forward(self, input: torch.Tensor):
-        torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
-
-        if self.sort:
-            input = self.sort_tokens(input)
-        
-        # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
-        input = self.mask_tokens(input) # only has effect during training
-        input = self.drop_tokens(input) # only has effect during evaluation
-
-        x = self.ln_1(input)  
-        x = self.mask_tokens(x)      
-        x = self.self_attention(x)
-        x = self.dropout(x)
-        x = x + input
-
-        y = self.ln_2(x)
-        y = self.mask_tokens(y)
-        y = self.mlp(y)
-        return x + y"""
     
     def forward(self, input: torch.Tensor):
         torch._assert(input.dim() == 3, f"Expected (batch_size, seq_length, hidden_dim) got {input.shape}")
 
-        if self.sort:
-            input = self.sort_tokens(input)
-        
-        # notice that both mask_tokens and drop_tokens are implemented as no-ops if sort_tokens is False
-        input = self.drop_tokens(input, force_drop=True)
+        if self.current_budget != 1:
+            # this is not optimal bcs norms probably do not change much
+            # sorting them at every block might be a waste of resources
+            input = self.sort_and_drop(input)
 
         x = self.ln_1(input)  
         x = self.self_attention(x)
@@ -156,15 +95,14 @@ class RankViTBlock(nn.Module):
         y = self.ln_2(x)
         y = self.mlp(y)
         return x + y
-    
-    
 
+    
     def set_budget(self, budget: float):
         self.current_budget = budget
 
 
 # ViT Encoder
-class ViTEncoder(nn.Module):
+class RankViTEncoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
     def __init__(
@@ -176,7 +114,8 @@ class ViTEncoder(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
-    ):
+        rankvit_layers: Optional[List[Union[int, float]]] = None
+        ):
         super().__init__()
         # Note that batch_size is on the first dim because
         # we have batch_first=True in nn.MultiAttention() by default
@@ -184,13 +123,23 @@ class ViTEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         layers: List = []
         for i in range(num_layers):
-            layers.append(RankViTBlock(
+            if i in rankvit_layers:
+                layers.append(RankViTBlock(
                             num_heads,
                             hidden_dim,
                             mlp_dim,
                             dropout,
                             attention_dropout,
                             ))
+            else: 
+                layers.append(ViTBlock(
+                            num_heads,
+                            hidden_dim,
+                            mlp_dim,
+                            dropout,
+                            attention_dropout,
+                            ))
+            
 
         self.layers = nn.Sequential(*layers)
         self.ln = nn.LayerNorm(hidden_dim)
@@ -205,7 +154,6 @@ class ViTEncoder(nn.Module):
 
 
 class RankVisionTransformer(nn.Module):
-    """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
 
     def __init__(
         self,
@@ -223,6 +171,7 @@ class RankVisionTransformer(nn.Module):
         num_class_tokens: int = 1,
         torch_pretrained_weights: Optional[str] = None,
         timm_pretrained_weights: Optional[str] = None,
+        rankvit_layers: Optional[List[Union[int, float]]] = None
     ):
         super().__init__()
         torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
@@ -237,6 +186,7 @@ class RankVisionTransformer(nn.Module):
         self.num_heads = num_heads
         self.num_registers = num_registers
         self.num_class_tokens = num_class_tokens
+        self.rankvit_layers = rankvit_layers
 
 
 
@@ -250,17 +200,19 @@ class RankVisionTransformer(nn.Module):
 
         # Add registers
         if num_registers > 0:
+            raise ValueError("Registers are not supported yet for this model.")
             self.register_tokens = nn.Parameter(torch.zeros(1, num_registers, hidden_dim))
             seq_length += num_registers
 
-        self.encoder = ViTEncoder(
+        self.encoder = RankViTEncoder(
             seq_length,
             num_layers,
             num_heads,
             hidden_dim,
             mlp_dim,
             dropout,
-            attention_dropout
+            attention_dropout, 
+            rankvit_layers
             )
 
 
@@ -328,30 +280,12 @@ class RankVisionTransformer(nn.Module):
         return x
     
 
-    def enable_ranking(self, sort_tokens: Union[bool, List[bool]] = False):
-        """
-        Enable ranking for the RankVit model.
-
-        Args:
-            sort_tokens (Union[bool, List[bool]], optional): 
-                A boolean value or a list of boolean values indicating whether to sort tokens for each RankVit block. 
-                If a single boolean value is provided, it will be applied to all RankVit blocks. 
-                If a list of boolean values is provided, each value will be applied to the corresponding RankVit block. 
-                Defaults to False.
-        """
-        if isinstance(sort_tokens, bool):
-            sort_tokens = [sort_tokens] * len(self.encoder.layers)
-
-        for rankvitblock, sort in zip(self.encoder.layers, sort_tokens):
-            rankvitblock.sort = sort
-    
-
     def set_budget(self, budget: float):
         self.current_budget = budget
-        for rankvitblock in self.encoder.layers:
-            if hasattr(rankvitblock, 'set_budget'):
-                rankvitblock.set_budget(budget)
-        self.enable_ranking(True)
+        #for i, vitblock in enumerate(self.encoder.layers):
+            #vitblock.set_budget(budget[i] if isinstance (budget, list) else budget)
+        for i in self.rankvit_layers:
+            self.encoder.layers[i].set_budget(budget[i] if isinstance (budget, list) else budget)
 
 
     def load_weights(
