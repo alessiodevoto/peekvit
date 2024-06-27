@@ -213,7 +213,7 @@ def save_state(path, model, model_args, noise_args, optimizer, epoch, skip_optim
     torch.save(state, checkpoint_path)
 
 
-def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=False):
+def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=False, verbose: bool=True):
     """
     Load the model state from a given path.
 
@@ -229,9 +229,10 @@ def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=Fal
     if model is None:
         # create model based on saved state
         # TODO edit this to load with hydra
-        print('Creating model based on saved state')
-        print('Model class: ', state['model_class'])
-        print('Model args: ', state['model_args'])
+        if verbose:
+            print('Creating model based on saved state')
+            print('Model class: ', state['model_class'])
+            print('Model args: ', state['model_args'])
         state['model_args'].pop('torch_pretrained_weights', None)
         state['model_args'].pop('timm_pretrained_weights', None)
         state['model_args'].pop('_target_', None)
@@ -256,7 +257,7 @@ def load_state(path, model : Any =None, optimizer : Any = None, strict: bool=Fal
 
 
 
-def get_checkpoint_path(experiment_dir, epoch='last'):
+def get_checkpoint_path(experiment_dir, epoch='last', verbose:bool=True):
     """
     Get the path of the checkpoint corresponding to the given epoch in the experiment directory.
 
@@ -274,7 +275,8 @@ def get_checkpoint_path(experiment_dir, epoch='last'):
         print('No checkpoints found in the experiment directory.')
         return None
     
-    print('Available checkpoints for this experiment: ', sorted(available_checkpoints))
+    if verbose:
+        print('Available checkpoints for this experiment: ', sorted(available_checkpoints))
 
     if epoch is None or epoch == 'last':
         checkpoint = sorted(os.listdir(checkpoints_dir))[-1]
