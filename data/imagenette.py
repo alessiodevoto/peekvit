@@ -40,8 +40,9 @@ class Imagenette:
   IMAGENETTE_CLASSES = ['tench', 'English springer', 'cassette player', 'chain saw', 'church', 'French horn', 'garbage truck', 'gas pump', 'golf ball', 'parachute']
 
 
-  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160, augmentation_ops=2, augmentation_magnitude=9, **kwargs):
+  def __init__(self, root, train_transform=None, test_transform=None, target_transform=None, image_size: int = 160, augmentation_ops=2, augmentation_magnitude=9, verbose:bool=True, **kwargs):
     self.root = root
+    self.verbose = verbose
     self.train_transform = train_transform
     self.test_transform = test_transform
     self.target_transform = target_transform
@@ -109,19 +110,19 @@ class Imagenette:
       # download the dataset to the directory
       downloaded_file = pathlib.Path(root) / "imagenette.zip"
       if not os.path.exists(downloaded_file):
-        print(f'Downloading Imagenette dataset to {downloaded_file}')
+        if self.verbose: print(f'Downloading Imagenette dataset to {downloaded_file}')
         downloaded_file.write_bytes(requests.get(self.IMAGENETTE_URL).content)
       else:
-        print(f'Archive found at {downloaded_file}, skipping download')
+        if self.verbose: print(f'Archive found at {downloaded_file}, skipping download')
 
       # unzip the downloaded file
       extracted_file = pathlib.Path(root) / 'imagenette2-160'
       if not os.path.exists(extracted_file):
-        print('Extracting archive')
+        if self.verbose: print('Extracting archive')
         with tarfile.open(downloaded_file) as file:
             file.extractall(path=root)
       else:
-        print(f'Extracted file found at {extracted_file}, skipping extraction')
+        if self.verbose: print(f'Extracted file found at {extracted_file}, skipping extraction')
       
 
       # create the Imagenette dataset
