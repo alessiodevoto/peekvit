@@ -7,7 +7,7 @@ import torchmetrics
 
 # change these values to what you need
 device = 'cuda'
-experiment_dir = '/home/aledev/projects/6G-workspace/6g_adaptive_workspace/adaptive_selection'
+experiment_dir = 'path/to/beamforiming/' # this directory should contain the directory called "checkpoints"
 dataset_root = '/home/aledev/projects/6G-workspace/6g_adaptive_workspace/data'
 batch_size = 64
 verbose = False
