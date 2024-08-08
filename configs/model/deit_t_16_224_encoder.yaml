@@ -7,4 +7,4 @@ mlp_dim: 768
 num_heads: 3
 num_classes: ${dataset.num_classes}
 timm_pretrained_weights: ['facebookresearch/deit:main', 'deit_tiny_patch16_224']
-r: [8, 8, 8, 8, 8, 8, 8, 8]
+r: [30,30,30,30,30,30] #[0, 0, 0, 0, 0, 0, 0, 0] #[8, 8, 8, 8, 8, 8, 8, 8]

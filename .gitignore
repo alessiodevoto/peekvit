@@ -13,3 +13,5 @@ tests**
 configs/test_config_personal.yaml
 configs/train_config_personal.yaml
 configs/logger/wandb_personal.yaml
+csv/
+images/
