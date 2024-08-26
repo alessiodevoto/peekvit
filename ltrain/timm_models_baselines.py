@@ -14,7 +14,7 @@ import timm
 from patch.timm_custom_patch import apply_patch_tome_encoder, apply_patch_tome_decoder, apply_patch_tome_classifier
 from noise_block import NoiseBlock
 from cnn import calculate_flattened_size, CustomCNN, CustomTransformerTopology
-from baselines import PCAReconstructor
+from baselines import PCAReconstructor, Autoencoder
 from patch_utils import apply_patch_ecn_dec_classifier
 
 # # Initial dimensions
@@ -46,34 +46,33 @@ class MAEVisionTransformer(torch.nn.Module):
         if self.compressor_name == "PCA":
             # Means that the compression is done through PCA
             self.compressor = PCAReconstructor(q=cfg.compressor.q, niter=cfg.compressor.niter)
-        
+        elif self.compressor_name == "Tome":
+            apply_patch_tome_encoder(self.mae_encoder, trace_source=True, prop_attn=True)
+            apply_patch_tome_decoder(self.decoder, prop_attn=False)
+            
+            self.mae_encoder.r = cfg.compressor.r if isinstance(cfg.compressor.r, int) else list(cfg.compressor.r)
+            
+
+        elif self.compressor_name == "No Compression":
+            pass
+        elif self.compressor_name == "AE":
+            self.compressor = Autoencoder(
+                input_dim=cfg.compressor.input_dim,
+                encoding_dim=cfg.compressor.encoding_dim,
+                activation = cfg.compressor.activation
+            )
         else: 
             raise ValueError("The model type is not supported")
-            # THe prpposed model parameters/workflow is not supported for now
-            # # Create the patch autoencoder
-            # apply_patch_ecn_dec_classifier(
-            #     model_encoder=self.mae_encoder,
-            #     model_decoder= self.decoder,
-            #     model_classifier=self.classifier,
-            #     transmit_cls_token = cfg.transmit_cls_token
-            # )
-            # # Create encoder tome patch 
-            # apply_patch_tome_encoder(self.mae_encoder, trace_source=True, prop_attn=True)
-            # apply_patch_tome_decoder(self.decoder, prop_attn=False)
-            
+           
         
 
-            # if type(cfg.encoder.r)==int:
-            #     self.mae_encoder.r = cfg.encoder.r
-            # else: 
-            #     self.mae_encoder.r = list(cfg.encoder.r)
 
     def initialize_network_base(self, cfg):
         # ------------------------ First part of the network --------------------------
         self.mae_encoder = timm.create_model('deit_tiny_patch16_224', pretrained=True) #VisionTransformer(**kwargs)
         # Get the number of blocks to skip or keep
         total_blocks = len(self.mae_encoder.blocks)
-        n_blocks = len(list(cfg.encoder.r))
+        n_blocks = 6
             
         # Take the topology classifier block:
         trnasformer_layer = self.mae_encoder.blocks[-1]
@@ -96,7 +95,7 @@ class MAEVisionTransformer(torch.nn.Module):
         # Assign the blocks
         self.classifier.blocks = self.classifier.blocks[n_blocks:]
         self.decoder.blocks = self.decoder.blocks[total_blocks - n_blocks:]
-        
+        self.train_classifier_separetely = cfg.train_classifier_separetely
 
         # ------------------------ Transmission parameters --------------------------
         # Noise block
@@ -129,15 +128,14 @@ class MAEVisionTransformer(torch.nn.Module):
         self.norm_pix_loss = False
         # Classifier loss
         self.classifier_loss = instantiate(cfg.loss.classification_loss)
-
-        self.use_trace_loss = cfg.decoder.use_trace_loss
+        self.use_trace_loss = cfg.compressor.get('use_trace_loss', False)
         
         # To maintain the best model accuracy
         self.best_validation_acc = -1
         self.best_val_loss_mse = -1
         self.best_val_loss_cl = -1
-        self.best_validation_acc_topology = -1
-        self.best_val_loss_topology_cl = -1
+        
+        
 
     def forward(
             self, 
@@ -151,72 +149,95 @@ class MAEVisionTransformer(torch.nn.Module):
         
         tokens = self.mae_encoder(imgs)
 
-        # self.decoder._tome_info["layer_source"] = self.mae_encoder._tome_info["layer_source"]
-
-        # trace = self.mae_encoder._tome_info["layer_source"].copy()
-        
-        
-        # H = torch.matmul(trace[0].permute(0,2,1), trace[1].permute(0,2,1))
-        # for trace_idx in range(2, len(trace)):
-        #     H = torch.matmul(H, trace[trace_idx].permute(0,2,1))
-        
-        # patch_trace = H.sum(dim=1)
-        # self.trace_not_merged_patches = []
-        # for img_idx in range(patch_trace.shape[0]):
-        #     not_merged_patches = torch.where(patch_trace[img_idx]==1)[0]
-            
-        #     not_merged_patches = (H[img_idx][:, not_merged_patches].sum(1) ==1)
-            
-        #     # Eliminate CLS
-        #     if self.transmit_cls_token == True:
-        #         not_merged_patches = not_merged_patches[1:]
-
-        #     self.trace_not_merged_patches.append(not_merged_patches)
-
         if self.compressor_name in ["Tome"]:
-            # Compression is performed in the encoder 
-            num_tokens_compressed = tokens.shape[1]
+            
             # Noise: Add noise
             tokens = self.noise_block(x=tokens, snr_db=snr_db)
-            
+
+            # Compression is performed in the encoder 
+            num_tokens_compressed = tokens.shape[1]
+            num_elements_copressed = tokens.shape[1] * tokens.shape[2]
+
+            self.decoder._tome_info["layer_source"] = self.mae_encoder._tome_info["layer_source"]
+
+            trace = self.mae_encoder._tome_info["layer_source"].copy()
+
+            if self.use_trace_loss == True:
+                H = torch.matmul(trace[0].permute(0,2,1), trace[1].permute(0,2,1))
+                for trace_idx in range(2, len(trace)):
+                    H = torch.matmul(H, trace[trace_idx].permute(0,2,1))
+                
+                patch_trace = H.sum(dim=1)
+                self.trace_not_merged_patches = []
+                for img_idx in range(patch_trace.shape[0]):
+                    not_merged_patches = torch.where(patch_trace[img_idx]==1)[0]
+                    
+                    not_merged_patches = (H[img_idx][:, not_merged_patches].sum(1) ==1)
+                    
+                    # Eliminate CLS
+                    if self.transmit_cls_token == True:
+                        not_merged_patches = not_merged_patches[1:]
+
+                    self.trace_not_merged_patches.append(not_merged_patches)
+
         elif self.compressor_name in ["PCA"]:
-            U, S, V, mean = self.compressor.decompose(tokens)
-            num_tokens_compressed = U.shape[1] + S.shape[1] + V.shape[1]
+            tokens_projected, V, A_mean = self.compressor.project(tokens)
+            num_tokens_compressed = tokens_projected.shape[1] + V.shape[1] + A_mean.shape[1]
+            
+            num_elements_copressed = tokens_projected.shape[1] * tokens_projected.shape[2] 
+            + V.shape[1] * V.shape[2]
+            + A_mean.shape[1] * A_mean.shape[2]
 
-            # Noise: Add noise
-            U = self.noise_block(x=U, snr_db=snr_db)
-            S = self.noise_block(x=S, snr_db=snr_db)
-            V = self.noise_block(x=V, snr_db=snr_db)
-            mean = self.noise_block(x=mean, snr_db=snr_db)
+            # Channel noise: Add noise
+            tokens_projected = self.noise_block(x=tokens_projected, snr_db=snr_db)
+            # V = self.noise_block(x=V, snr_db=snr_db)
+            # A_mean = self.noise_block(x=A_mean, snr_db=snr_db)
 
-            tokens = self.compressor.reconstruct(U, S, V, mean)
+            tokens = self.compressor.reconstruct_from_projection(tokens_projected, V, A_mean)
+            
+        elif self.compressor_name in ["No Compression"]:
+            tokens = self.noise_block(x=tokens, snr_db=snr_db)
+            num_tokens_compressed = tokens.shape[1]
+            num_elements_copressed = tokens.shape[1] * tokens.shape[2]
+        
+        elif self.compressor_name in ["AE"]:
+            tokens = self.compressor.encode(tokens)
+
+            tokens = self.noise_block(x=tokens, snr_db=snr_db)
+
+            num_tokens_compressed = tokens.shape[1]
+            num_elements_copressed = tokens.shape[1] * tokens.shape[2]
+
+            tokens = self.compressor.decode(tokens)
+
         else:
             raise ValueError("The model type is not supported")
 
+
+        tokens_decoded = self.decoder(tokens)
         
-        if self.classifier == None:
-            # Image reconstruction and classification
-            cls_tokens, tokens_decoded = self.decoder(tokens)
-        elif self.model_type == "Encoder_Decoder_two_models_sequential":
-            # Image reconstruction 
-            tokens_decoded = self.decoder(tokens)
-            # Image classification
-            cls_tokens = self.classifier(tokens_decoded)
+        # Image classification
+        if self.train_classifier_separetely == True:
+            cls_tokens = self.classifier(tokens_decoded.clone().detach().requires_grad_(False))
         else:
-            # Image classification
-            cls_tokens = self.classifier(tokens)
-            # Image reconstruction 
-            tokens_decoded = self.decoder(tokens)
+            cls_tokens = self.classifier(tokens_decoded)
+        # else:
+        #     # Image classification
+        #     cls_tokens = self.classifier(tokens)
+        #     # Image reconstruction 
+        #     tokens_decoded = self.decoder(tokens)
         
 
         # Final step of classification
         class_preds = self.head(cls_tokens)
 
-        #cnn_preds = self.cnn(H.unsqueeze(1))
-
         # Final steps of decoder
         num_tokens_decompressed = tokens_decoded.shape[1]
+        num_elements_decopressed = tokens_decoded.shape[1] * tokens_decoded.shape[2]
+        
         self.logger.log({"Token compression": np.round(num_tokens_compressed / num_tokens_decompressed, 3)})
+        self.logger.log({"Elements compression": np.round(num_elements_copressed / num_elements_decopressed, 3)})
+
         tokens_decoded = self.decoder_norm(tokens_decoded)
         pred_pathces = self.decoder_pred(tokens_decoded)
         
@@ -232,13 +253,10 @@ class MAEVisionTransformer(torch.nn.Module):
         else:
             reconstruction_loss = torch.tensor([0]).to(classification_loss.device)
         
-        cnn_loss = torch.tensor([0]).to(classification_loss.device)
         output_dict = {
             "reconstruction_loss": reconstruction_loss,
             "classification_loss": classification_loss,
-            "topology_loss": cnn_loss,
             "class_preds": class_preds,
-            "topology_class_preds": torch.zeros(class_preds.shape).to(classification_loss.device),
             "reconstructed_image": self.unpatchify(pred_pathces)
         }
         return output_dict
@@ -265,10 +283,7 @@ class MAEVisionTransformer(torch.nn.Module):
             for img_idx, trace in enumerate(self.trace_not_merged_patches):
                 loss += ((pred[img_idx][trace] - target[img_idx][trace])**2).mean() 
             
-            loss = loss / len(self.trace_not_merged_patches)
-
-
-        
+            loss = loss / len(self.trace_not_merged_patches)        
         return loss
     
     def patchify(self, imgs):

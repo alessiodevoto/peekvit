@@ -1,5 +1,5 @@
 import os, sys
-
+import json
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
@@ -78,45 +78,45 @@ def train(cfg: DictConfig):
     model.logger = logger
 
     # load from checkpoint if requested
-    load_from = cfg.load_from
-    if load_from is not None:
-        # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
-        load_from = (
-            load_from if load_from.endswith(".pth") else get_checkpoint_path(load_from)
-        )
-        print("Loading model from checkpoint: ", load_from)
-        model, _, _, _, _ = load_state(load_from, model=model)
+    # load_from = cfg.load_from
+    # if load_from is not None:
+    #     # load from might be a path to a checkpoint or a path to an experiment directory, handle both cases
+    #     load_from = (
+    #         load_from if load_from.endswith(".pth") else get_checkpoint_path(load_from)
+    #     )
+    #     print("Loading model from checkpoint: ", load_from)
+    #     model, _, _, _, _ = load_state(load_from, model=model)
 
-    # edit model here if requested
-    if training_args["reinit_class_tokens"]:
-        model = reinit_class_tokens(model)
+    # # edit model here if requested
+    # if training_args["reinit_class_tokens"]:
+    #     model = reinit_class_tokens(model)
 
     # Main loss
     #main_criterion = instantiate(cfg.loss.classification_loss)
 
     # we might have N additional losses
     # so we store the in a dictionary
-    additional_losses = None
-    if cfg.loss.additional_losses is not None:
-        additional_losses = LossCompose(cfg.loss.additional_losses)
+    # additional_losses = None
+    # if cfg.loss.additional_losses is not None:
+    #     additional_losses = LossCompose(cfg.loss.additional_losses)
 
-    # metrics
-    metric_mse = torchmetrics.MeanMetric().to(device)
-    metric_cl_loss = torchmetrics.MeanMetric().to(device)
+    # # metrics
+    # metric_mse = torchmetrics.MeanMetric().to(device)
+    # metric_cl_loss = torchmetrics.MeanMetric().to(device)
+    
     metric_acc = torchmetrics.classification.Accuracy(
         task="multiclass", num_classes=cfg.encoder.num_classes
     ).to(device)
-    metric_acc_topology = torchmetrics.classification.Accuracy(
-        task="multiclass", num_classes=cfg.encoder.num_classes
-    ).to(device)
 
-    # optimizer and scheduler
+    # Optimizer and scheduler
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
     scheduler = None
     if "scheduler" in cfg:
         scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
-    def plot_reconstructed_images_in_training(model,):
+    def plot_reconstructed_images_in_training(model, epoch, snr_db):
+        if epoch == -1:
+            epoch = "best"
 
         subset_idcs = torch.arange(
             0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
@@ -129,16 +129,17 @@ def train(cfg: DictConfig):
             images_to_plot,
             model_transform=None,
             visualization_transform=dataset.denormalize_transform,
+            snr_db=snr_db
         )
 
         os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
         os.makedirs(
-            f"{experiment_dir}/images/epoch_{epoch}/reconstructed",
+            f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}",
             exist_ok=True,
         )
         for i, (_, img) in enumerate(images.items()):
             img.savefig(
-                f"{experiment_dir}/images/epoch_{epoch}/reconstructed/reconstructed_img_{subset_idcs[i]}.png"
+                f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/reconstructed_img_{subset_idcs[i]}.png"
             )
 
     # training loop
@@ -151,12 +152,6 @@ def train(cfg: DictConfig):
                 verbose=epoch == 0,
             )
 
-        # if "train_budget" in training_args:
-        #     print("Setting budget to ", training_args["train_budget"])
-        #     model.set_budget(training_args["train_budget"])
-        #     if hasattr(model, "enable_ranking"):
-        #         model.enable_ranking(True)
-
         for batch, labels in tqdm(loader, desc=f"Training epoch {epoch}"):
             batch, labels = batch.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -166,9 +161,9 @@ def train(cfg: DictConfig):
             
             reconstruction_loss = model_out["reconstruction_loss"]
             classification_loss = model_out["classification_loss"]
-            topology_loss = model_out["topology_loss"]
+ 
 
-            loss = reconstruction_loss + classification_loss + topology_loss
+            loss = reconstruction_loss + classification_loss
             loss.backward()
 
             # Apply gradient clipping
@@ -182,7 +177,6 @@ def train(cfg: DictConfig):
                     "train/total_loss": loss.detach().item(),
                     "train/mse_loss": reconstruction_loss.detach().item(),
                     "train/classification_loss": classification_loss.detach().item(),
-                    "train/topology_loss": topology_loss.detach().item(),
                 }
                 # | add_loss_dict
             )
@@ -194,7 +188,7 @@ def train(cfg: DictConfig):
     @torch.no_grad()
     def validate_epoch(model, loader, epoch, snr_db=0):
         model.eval()
-        batches_loss_mse, batches_loss_cl, batches_topology_loss_cl = 0, 0, 0
+        batches_loss_mse, batches_loss_cl = 0, 0
         for batch, labels in tqdm(loader, desc=f"Validation epoch {epoch}"):
             batch, labels = batch.to(device), labels.to(device)
             model_out = model(
@@ -205,49 +199,39 @@ def train(cfg: DictConfig):
             )
             val_reconstruction_loss = model_out["reconstruction_loss"]
             val_classification_loss = model_out["classification_loss"]
-            val_class_preds = model_out["class_preds"]
-
-            val_topology_cnn_loss = model_out["topology_loss"]
-            val_topology_class_preds = model_out["topology_class_preds"]
-
-            
-            metric_acc(val_class_preds, labels)
-            metric_acc_topology(val_topology_class_preds, labels)
-            
+            val_class_preds = model_out["class_preds"]            
+            metric_acc(val_class_preds, labels)        
             batches_loss_mse += val_reconstruction_loss.detach().item()
             batches_loss_cl += val_classification_loss.detach().item()
-            batches_topology_loss_cl += val_topology_cnn_loss.detach().item()
 
         # Cost
         val_loss_mse = batches_loss_mse / len(loader)
         val_loss_cl = batches_loss_cl / len(loader)
-        val_loss_topology_cl = batches_loss_cl / len(loader)
-        
+    
         # Acc metric
         acc = metric_acc.compute()
-        acc_topology = metric_acc_topology.compute()
-
         metric_acc.reset()
-        metric_acc_topology.reset()
+    
 
-        return acc, acc_topology, val_loss_mse, val_loss_cl, val_loss_topology_cl
+        return acc, val_loss_mse, val_loss_cl
 
     # validation loop
     @torch.no_grad()
-    def validate(model, loader, epoch, snr_db=5):
+    def validate(model, loader, epoch, snr_db=5, log=True):
         model.eval()
         
-        acc, acc_topology, val_loss_mse, val_loss_cl, val_loss_topology_cl = validate_epoch(model, loader, epoch, snr_db=snr_db)
-        logger.log({"val/mse": val_loss_mse, 
-                    "val/classification_loss": val_loss_cl,
-                    "val/accuracy": acc,
-                    "val/loss": val_loss_mse + val_loss_cl + val_loss_topology_cl,
-                     "val/topology_loss": val_loss_topology_cl,
-                     "val/topology_accuracy": acc_topology,})
+        acc, val_loss_mse, val_loss_cl = validate_epoch(model, loader, epoch, snr_db=snr_db)
+        if log==True:
+            logger.log({"val/mse": val_loss_mse, 
+                        "val/classification_loss": val_loss_cl,
+                        "val/accuracy": acc,
+                        "val/loss": val_loss_mse + val_loss_cl})
 
-        return acc, acc_topology, val_loss_mse, val_loss_cl, val_loss_topology_cl
+        return acc, val_loss_mse, val_loss_cl
 
     train_snr_bd = None if cfg.train_snr_db == "random" else cfg.train_snr_db 
+    
+    
     # Training
     for epoch in range(training_args["num_epochs"] + 1):
         
@@ -258,49 +242,95 @@ def train(cfg: DictConfig):
             training_args["eval_every"] != -1
             and epoch % training_args["eval_every"] == 0
         ):
-            validation_acc, validation_acc_topology, val_loss_mse, val_loss_cl, val_loss_topology_cl = validate(model, val_loader, epoch, snr_db=cfg.validate_snr_db)
+            validation_acc, val_loss_mse, val_loss_cl = validate(model, val_loader, epoch, snr_db=100)
             
             if validation_acc > model.best_validation_acc:
                 model.best_validation_acc = validation_acc
                 model.best_val_loss_mse = val_loss_mse
                 model.best_val_loss_cl = val_loss_cl
+                save_state(checkpoints_dir, model, None, None, optimizer, epoch)
 
-                model.best_val_loss_topology_cl = val_loss_topology_cl
-                model.best_validation_acc_topology = validation_acc_topology
-
-                # save_state(checkpoints_dir, model, cfg.model,cfg.noise, optimizer, epoch)
-
-            plot_reconstructed_images_in_training(model)
+            # plot_reconstructed_images_in_training(model)
 
         
     logger.log({"val/best_mse": model.best_val_loss_mse, 
                 "val/best_classification_loss": model.best_val_loss_cl,
-                "val/best_topology_accuracy": model.best_validation_acc_topology,
                 "val/best_accuracy": model.best_validation_acc,
-                "val/best_topology_loss": model.best_val_loss_topology_cl,
-                "val/best_loss": model.best_validation_acc + model.best_val_loss_cl + model.best_val_loss_topology_cl})
+                "val/best_loss": model.best_validation_acc + model.best_val_loss_cl})
+    
+    # Evaluation part:
+    # 1st load the best model:
+    path_to_run = '/'.join(checkpoints_dir.split('/')[:-1])
+    best_model_path = get_checkpoint_path(path_to_run)
+    model, _, _, _, _ = load_state(best_model_path, model=model)
+    results_collector = {}
+    for snr_db in range(-10, 11, 1):
+        test_acc, test_loss_mse, test_loss_cl = validate(
+            model,
+            val_loader,
+            epoch=-1,
+            snr_db=snr_db,
+            log=False
+        )
+        
+        logger.log({"test/mse": test_loss_mse, 
+                    "test/classification_loss": test_loss_cl,
+                    "test/accuracy": test_acc,
+                    "test/loss": test_loss_mse + test_loss_cl})
+
+        results_collector[snr_db] = {
+            "test/mse": test_loss_mse, 
+            "test/classification_loss": test_loss_cl,
+            "test/accuracy": test_acc,
+            "test/loss": test_loss_mse + test_loss_cl
+        }
+
+        plot_reconstructed_images_in_training(model, epoch=-1, snr_db=snr_db)
+    # Save the collected results into path_to_run
+    # as a json file
+    
+    # Make sure to convert all tensor values to python scalars
+    for key in results_collector.keys():
+        results_collector[key] = {k: v.item() if hasattr(v, "item") else v for k, v in results_collector[key].items()}
+        
+
+    with open(f"{path_to_run}/results.json", "w") as f:
+        json.dump(results_collector, f)
+    logger.close()
+    # Delete all unnecessary checkpoints paths keep only best_model_path
+    
+    # Delete all checkpoints except the best one
+    checkpoint_dir = os.path.join(path_to_run, "checkpoints")
+    for file in os.listdir(checkpoint_dir):
+        #if file.endswith(".pth") and file != best_model_path.split('/')[-1]:
+        os.remove(os.path.join(checkpoint_dir, file))
+
+
 
 
 import matplotlib.pyplot as plt
 def plot_reconstructed_images(
-    model, images_to_plot, model_transform, visualization_transform
+    model, 
+    images_to_plot,
+    model_transform, 
+    visualization_transform,
+    snr_db,
 ):
     figs = {}
     i = 0
     for img, label in tqdm(images_to_plot, desc="Preparing reconstructed images plots"):
 
-        # forward pass
+        # Forward pass
         _img = model_transform(img) if model_transform is not None else img
-
-        # model.set_budget(budget)
         device = model.decoder_pred.weight.device
-        #_,_, reconstructed = model(make_batch(_img).to(device), torch.tensor([label]).long().to(device), return_pred_images=True)
-        model_out = model(make_batch(_img).to(device), torch.tensor([label]).long().to(device), return_pred_images=True)
+        model_out = model(make_batch(_img).to(device),
+                        torch.tensor([label]).long().to(device),
+                        return_pred_images=True, snr_db=snr_db)
         
         reconstructed = model_out["reconstructed_image"]
 
 
-        # prepare plot, we want a row for each residual layer,
+        # Prepare plot, we want a row for each residual layer,
         # and two columns, one for the image and one for token masks
         fig, axs = plt.subplots(3, 1, squeeze=False, figsize=(10, 25))
 

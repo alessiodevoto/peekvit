@@ -1,0 +1,4 @@
+name: AE
+input_dim: 192
+encoding_dim: 192
+activation: False
