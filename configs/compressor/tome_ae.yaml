@@ -1,0 +1,6 @@
+name: "Tome+AE"
+r: [8,8,8,8,8,8]
+use_trace_loss: False
+input_dim: 192
+encoding_dim: 128
+activation: False

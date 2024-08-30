@@ -51,8 +51,7 @@ class MAEVisionTransformer(torch.nn.Module):
             apply_patch_tome_decoder(self.decoder, prop_attn=False)
             
             self.mae_encoder.r = cfg.compressor.r if isinstance(cfg.compressor.r, int) else list(cfg.compressor.r)
-            
-
+    
         elif self.compressor_name == "No Compression":
             pass
         elif self.compressor_name == "AE":
@@ -61,6 +60,18 @@ class MAEVisionTransformer(torch.nn.Module):
                 encoding_dim=cfg.compressor.encoding_dim,
                 activation = cfg.compressor.activation
             )
+        elif self.compressor_name == "Tome+AE":
+            apply_patch_tome_encoder(self.mae_encoder, trace_source=True, prop_attn=True)
+            apply_patch_tome_decoder(self.decoder, prop_attn=False)
+            
+            self.mae_encoder.r = cfg.compressor.r if isinstance(cfg.compressor.r, int) else list(cfg.compressor.r)
+
+            self.compressor = Autoencoder(
+                input_dim=cfg.compressor.input_dim,
+                encoding_dim=cfg.compressor.encoding_dim,
+                activation = cfg.compressor.activation
+            )
+
         else: 
             raise ValueError("The model type is not supported")
            
@@ -209,7 +220,44 @@ class MAEVisionTransformer(torch.nn.Module):
             num_elements_copressed = tokens.shape[1] * tokens.shape[2]
 
             tokens = self.compressor.decode(tokens)
+        elif self.compressor_name in ["Tome+AE"]:
+            # Tome has already been applied
 
+            # Encode 
+            tokens = self.compressor.encode(tokens)
+
+            # Noise: Add noise
+            tokens = self.noise_block(x=tokens, snr_db=snr_db)
+
+
+            # Compression is performed in the encoder 
+            num_tokens_compressed = tokens.shape[1]
+            num_elements_copressed = tokens.shape[1] * tokens.shape[2]
+
+            self.decoder._tome_info["layer_source"] = self.mae_encoder._tome_info["layer_source"]
+
+            trace = self.mae_encoder._tome_info["layer_source"].copy()
+
+            if self.use_trace_loss == True:
+                H = torch.matmul(trace[0].permute(0,2,1), trace[1].permute(0,2,1))
+                for trace_idx in range(2, len(trace)):
+                    H = torch.matmul(H, trace[trace_idx].permute(0,2,1))
+                
+                patch_trace = H.sum(dim=1)
+                self.trace_not_merged_patches = []
+                for img_idx in range(patch_trace.shape[0]):
+                    not_merged_patches = torch.where(patch_trace[img_idx]==1)[0]
+                    
+                    not_merged_patches = (H[img_idx][:, not_merged_patches].sum(1) ==1)
+                    
+                    # Eliminate CLS
+                    if self.transmit_cls_token == True:
+                        not_merged_patches = not_merged_patches[1:]
+
+                    self.trace_not_merged_patches.append(not_merged_patches)
+            
+            tokens = self.compressor.decode(tokens)
+            
         else:
             raise ValueError("The model type is not supported")
 

@@ -1,3 +1,6 @@
 name: Tome
 r: [8,8,8,8,8,8]
 use_trace_loss: True
+input_dim: 192
+encoding_dim: 192
+activation: False
