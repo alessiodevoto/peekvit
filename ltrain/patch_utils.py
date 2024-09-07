@@ -54,7 +54,15 @@ def make_vision_classifier(transformer_class):
             
             # Add the CLS token to the input
             x = torch.cat((cls_token, x), dim=1)
-            x = self.pos_drop(x + self.pos_embed)
+            # Check if self has the attribute _tome_info
+            if not hasattr(self, '_tome_info'):
+                self._tome_info = {}
+            
+            if self._tome_info.get('not_merged_patches', None) !=None:
+                x[:,0,:] = x[:,0,:] + self.pos_embed[:,0,:]
+                #x = self.pos_drop(x + self.pos_embed[:,self._tome_info['not_merged_patches']])
+            else:
+                x = self.pos_drop(x + self.pos_embed)
             
             # Process
             x = self.forward_features(x)

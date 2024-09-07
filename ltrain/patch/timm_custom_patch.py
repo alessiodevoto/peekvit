@@ -255,6 +255,7 @@ def apply_patch_tome_classifier(
         "size": None,
         "source": None,
         "layer_source": [],
+        "not_merged_patches": None,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": model.cls_token is not None,

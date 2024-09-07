@@ -71,11 +71,18 @@ class MAEVisionTransformer(torch.nn.Module):
                 encoding_dim=cfg.compressor.encoding_dim,
                 activation = cfg.compressor.activation
             )
+        elif self.compressor_name == "Tome+onlyclassifier":
+            apply_patch_tome_encoder(self.mae_encoder, trace_source=True, prop_attn=True)
+            #apply_patch_tome_decoder(self.decoder, prop_attn=False)
+            apply_patch_tome_classifier(self.classifier, prop_attn=False)
+            self.mae_encoder.r = cfg.compressor.r if isinstance(cfg.compressor.r, int) else list(cfg.compressor.r)
 
         else: 
             raise ValueError("The model type is not supported")
            
-        
+        if self.model_type =='paralel_models':
+            apply_patch_tome_classifier(self.classifier, prop_attn=False)
+
 
 
     def initialize_network_base(self, cfg):
@@ -106,7 +113,7 @@ class MAEVisionTransformer(torch.nn.Module):
         # Assign the blocks
         self.classifier.blocks = self.classifier.blocks[n_blocks:]
         self.decoder.blocks = self.decoder.blocks[total_blocks - n_blocks:]
-        self.train_classifier_separetely = cfg.train_classifier_separetely
+        self.train_classifier_separetely = False
 
         # ------------------------ Transmission parameters --------------------------
         # Noise block
@@ -190,6 +197,38 @@ class MAEVisionTransformer(torch.nn.Module):
                         not_merged_patches = not_merged_patches[1:]
 
                     self.trace_not_merged_patches.append(not_merged_patches)
+        elif self.compressor_name in ["Tome+onlyclassifier"]:
+            # Final steps of decoder
+            num_tokens_decompressed = 196
+            num_elements_decopressed = 196 * 192
+            # Noise: Add noise
+            tokens = self.noise_block(x=tokens, snr_db=snr_db)
+
+            # Compression is performed in the encoder 
+            num_tokens_compressed = tokens.shape[1]
+            num_elements_copressed = tokens.shape[1] * tokens.shape[2]
+
+            trace = self.mae_encoder._tome_info["layer_source"].copy()
+            if len(trace) > 1:
+                H = torch.matmul(trace[0].permute(0,2,1), trace[1].permute(0,2,1))
+                for trace_idx in range(2, len(trace)):
+                    H = torch.matmul(H, trace[trace_idx].permute(0,2,1))
+                
+                patch_trace = H.sum(dim=1)
+                self.trace_not_merged_patches = []
+                for img_idx in range(patch_trace.shape[0]):
+                    not_merged_patches = torch.where(patch_trace[img_idx]==1)[0]
+                    
+                    not_merged_patches = (H[img_idx][:, not_merged_patches].sum(1) ==1)
+                    
+                    # Eliminate CLS
+                    if self.transmit_cls_token == True:
+                        not_merged_patches = not_merged_patches[1:]
+
+                    self.trace_not_merged_patches.append(not_merged_patches)
+                self.classifier._tome_info["not_merged_patches"] = [torch.concat([torch.tensor([True]).to(i.device),i]) for i in self.trace_not_merged_patches]
+            else:
+                self.classifier._tome_info["not_merged_patches"] = None
 
         elif self.compressor_name in ["PCA"]:
             tokens_projected, V, A_mean = self.compressor.project(tokens)
@@ -261,27 +300,28 @@ class MAEVisionTransformer(torch.nn.Module):
         else:
             raise ValueError("The model type is not supported")
 
-
-        tokens_decoded = self.decoder(tokens)
-        
-        # Image classification
-        if self.train_classifier_separetely == True:
-            cls_tokens = self.classifier(tokens_decoded.clone().detach().requires_grad_(False))
+        if self.compressor_name in ["Tome+onlyclassifier"]:
+            tokens_decoded = tokens
         else:
+            tokens_decoded = self.decoder(tokens)
+            # Final steps of decoder
+            num_tokens_decompressed = tokens_decoded.shape[1]
+            num_elements_decopressed = tokens_decoded.shape[1] * tokens_decoded.shape[2]
+            
+        # Image classification
+        if self.model_type == "Encoder_Decoder_two_models_sequential":
             cls_tokens = self.classifier(tokens_decoded)
-        # else:
-        #     # Image classification
-        #     cls_tokens = self.classifier(tokens)
-        #     # Image reconstruction 
-        #     tokens_decoded = self.decoder(tokens)
         
+        elif self.model_type == "paralel_models":
+            if tokens.shape[1] != 196 and "Tome" in self.compressor_name:
+                self.classifier._tome_info["not_merged_patches"] = True
+            cls_tokens = self.classifier(tokens)
+        
+        else:
+            pass        
 
         # Final step of classification
         class_preds = self.head(cls_tokens)
-
-        # Final steps of decoder
-        num_tokens_decompressed = tokens_decoded.shape[1]
-        num_elements_decopressed = tokens_decoded.shape[1] * tokens_decoded.shape[2]
         
         self.logger.log({"Token compression": np.round(num_tokens_compressed / num_tokens_decompressed, 3)})
         self.logger.log({"Elements compression": np.round(num_elements_copressed / num_elements_decopressed, 3)})
@@ -305,7 +345,7 @@ class MAEVisionTransformer(torch.nn.Module):
             "reconstruction_loss": reconstruction_loss,
             "classification_loss": classification_loss,
             "class_preds": class_preds,
-            "reconstructed_image": self.unpatchify(pred_pathces)
+            "reconstructed_image": self.unpatchify(pred_pathces) if self.reconstruct_images == True else None,
         }
         return output_dict
     

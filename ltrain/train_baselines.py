@@ -141,6 +141,34 @@ def train(cfg: DictConfig):
             img.savefig(
                 f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/reconstructed_img_{subset_idcs[i]}.png"
             )
+    
+    def plot_reconstructed_images_pergroup_in_training(model, epoch, snr_db):
+        if epoch == -1:
+            epoch = "best"
+
+        subset_idcs = torch.arange(
+            0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
+        )
+        images_to_plot = Subset(val_dataset, subset_idcs)
+        
+
+        images = plot_reconstructed_images_pergroup(
+            model,
+            images_to_plot,
+            model_transform=None,
+            visualization_transform=dataset.denormalize_transform,
+            snr_db=snr_db
+        )
+
+        os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
+        os.makedirs(
+            f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/pergroup",
+            exist_ok=True,
+        )
+        for i, (_, img) in enumerate(images.items()):
+            img.savefig(
+                f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/pergroup/image_{subset_idcs[i]}.png"
+            )
 
     # training loop
     def train_epoch(model, loader, optimizer, epoch, snr_db):
@@ -233,7 +261,9 @@ def train(cfg: DictConfig):
     
     
     # Training
-    for epoch in range(training_args["num_epochs"] + 1):
+    for epoch in range(1, training_args["num_epochs"] + 1):
+        #plot_reconstructed_images_in_training(model, epoch=-1, snr_db=snr_db)
+        # Plot per group
         
         train_epoch(model, train_loader, optimizer, epoch, train_snr_bd)
         
@@ -285,7 +315,12 @@ def train(cfg: DictConfig):
             "test/loss": test_loss_mse + test_loss_cl
         }
 
-        plot_reconstructed_images_in_training(model, epoch=-1, snr_db=snr_db)
+        # plot_reconstructed_images_in_training(model, epoch=-1, snr_db=snr_db)
+        # Plot per group
+    if cfg.plot_groups == True:
+        plot_reconstructed_images_pergroup_in_training(model, epoch=-1, snr_db=0)
+
+            
     # Save the collected results into path_to_run
     # as a json file
     
@@ -397,7 +432,7 @@ def make_mask_visualization(
     num_groups = vis.max().item() + 1
 
     cmap = tome.vis.generate_colormap(num_groups)
-    vis_img = 0
+    vis_img = img
 
     for i in range(num_groups):
         mask = (vis == i).float().view(1, 1, ph, pw)
@@ -411,13 +446,204 @@ def make_mask_visualization(
         if not np.isfinite(color).all():
             color = np.zeros(3)
 
-        vis_img = vis_img + mask_eroded * color.reshape(1, 1, 3)
-        vis_img = vis_img + mask_edge * np.array(cmap[i]).reshape(1, 1, 3)
+        # vis_img = vis_img + mask_eroded * color.reshape(1, 1, 3)
+        # vis_img = vis_img + mask_edge * np.array(cmap[i]).reshape(1, 1, 3)
+        # Adjust the brightness of the image where the mask is applied
+        vis_img = vis_img * (1 - mask_eroded) + mask_eroded * (0.8 * vis_img + 0.2 * color)
 
+        # Blend with the colormap
+        vis_img += mask_edge * np.array(cmap[i]).reshape(1, 1, 3)
+    
+    vis_img = np.clip(vis_img, 0, 1)
     # Convert back into a PIL image
     # vis_img = Image.fromarray(np.uint8(vis_img * 255))
 
     return vis_img
+
+from scipy.ndimage import binary_erosion, binary_dilation
+# def make_mask_visualization_pergroup(
+#     img, source: torch.Tensor, patch_size: int = 16, class_token: bool = True
+# ):
+#     """
+#     Create a visualization with thicker, more colorful, and distinct borders.
+
+#     Args:
+#         img (np.array): Original image as a numpy array (RGB format).
+#         source (torch.Tensor): Tensor containing segmentation/classification information.
+#         patch_size (int): Size of patches for segmentation.
+#         class_token (bool): Whether to include a class token.
+
+#     Returns:
+#         np.array: Modified image with masks overlayed.
+#     """
+
+#     source = source.detach().cpu()
+
+#     h, w, _ = img.shape
+#     ph = h // patch_size
+#     pw = w // patch_size
+
+#     if class_token:
+#         source = source[:, :, 1:]
+
+#     vis = source.argmax(dim=1)
+#     num_groups = vis.max().item() + 1
+
+#     cmap = tome.vis.generate_colormap(num_groups)
+#     vis_img = img.copy()
+
+#     for i in range(num_groups):
+#         mask = (vis == i).float().view(1, 1, ph, pw)
+#         mask = torch.nn.functional.interpolate(mask, size=(h, w), mode="nearest")
+#         mask = mask.view(h, w, 1).numpy()
+
+#         # Calculate the color for the current mask
+#         color = (mask * img).sum(axis=(0, 1)) / (mask.sum() + 1e-8)  # Avoid division by zero
+
+#         # Erode the mask to create the inner part and edges
+#         mask_eroded = binary_erosion(mask[..., 0], iterations=2)[..., None].astype(float)
+
+#         # Calculate the edges by subtracting the eroded mask from the original mask
+#         mask_edge = mask - mask_eroded
+
+#         # Make the edges more rigid and distinct by intensifying the color
+#         vis_img = vis_img * (1 - mask_edge) + mask_edge * np.array(cmap[i]).reshape(1, 1, 3)
+
+#         # Optionally, darken the original mask to make the edges stand out more
+#         vis_img = vis_img * (1 - mask_eroded) + mask_eroded * (0.5 * vis_img + 0.5 * color)
+
+#     # Ensure image values are within the valid range
+#     vis_img = np.clip(vis_img, 0, 1)
+
+#     return vis_img
+
+
+def make_mask_visualization_pergroup(
+    img, source: torch.Tensor, patch_size: int = 16, class_token: bool = True
+):
+    """
+    Create a visualization with colored borders for groups provided in the source,
+    with the last group specifically having a black border.
+
+    Args:
+        img (np.array): Original image as a numpy array (RGB format).
+        source (torch.Tensor): Tensor containing segmentation/classification information.
+        patch_size (int): Size of patches for segmentation.
+        class_token (bool): Whether to include a class token.
+
+    Returns:
+        np.array: Image with overlayed borders.
+    """
+
+    source = source.detach().cpu()
+
+    h, w, _ = img.shape
+    ph = h // patch_size
+    pw = w // patch_size
+
+    if class_token:
+        source = source[:, :, 1:]
+
+    vis = source.argmax(dim=1)
+    num_groups = vis.max().item() 
+
+    # Colors for each group, specify black for the last group
+    colors = [
+        [1, 0, 0],  # Red
+        [0, 1, 0],  # Green
+        [0, 0, 1],  # Blue
+        [0.5, 0, 0.5],  # Violet
+        [1, 0.843, 0],  # Pink
+    ]
+
+    colors[:num_groups] +  [[0, 0, 0]] # Black for the last group
+
+    vis_img = img.copy()  # Start with the original image
+
+    for i in range(num_groups):
+        mask = (vis == i).float().view(1, 1, ph, pw)
+        mask = torch.nn.functional.interpolate(mask, size=(h, w), mode="nearest")
+        mask = mask.view(h, w).numpy()
+
+        # Erode the mask to create the inner part and edges
+        mask_eroded = binary_erosion(mask, iterations=2)
+        mask_edge = mask - mask_eroded
+
+        # Color the edges using predefined colors
+        edge_color = np.array(colors[i], dtype=np.float32)
+        for c in range(3):  # Apply color to the edge
+            vis_img[:, :, c] = np.where(mask_edge, edge_color[c], vis_img[:, :, c])
+
+    # Ensure image values are within the valid range
+    vis_img = np.clip(vis_img, 0, 1)
+
+    return vis_img
+
+
+
+
+def plot_reconstructed_images_pergroup(
+    model, 
+    images_to_plot,
+    model_transform, 
+    visualization_transform,
+    snr_db,
+):
+    figs = {}
+    i = 0
+    
+    for img, label in tqdm(images_to_plot, desc="Preparing reconstructed images plots"):
+        
+        # Create a new figure for each image
+        fig, ax = plt.subplots(figsize=(5, 5))
+        
+        # Remove white borders
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        ax.margins(0)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_frame_on(False)
+        
+        # Forward pass
+        _img = model_transform(img) if model_transform is not None else img
+        device = model.decoder_pred.weight.device
+        model_out = model(make_batch(_img).to(device),
+                        torch.tensor([label]).long().to(device),
+                        return_pred_images=True, snr_db=snr_db)
+
+        # Prepare the original image for plotting
+        img = prepare_for_matplotlib(
+            visualization_transform(img) if visualization_transform is not None else img
+        )
+
+       
+       
+        # Visualizations with mask
+        source = model.mae_encoder._tome_info["source"] if hasattr(model.mae_encoder, "_tome_info") else None
+        vals, indices = torch.topk(source.sum(-1).flatten(), k=5)
+
+        # Generate the mask visualization
+        mask_img = make_mask_visualization_pergroup(
+            img, 
+            #source[:, indices, :],
+            torch.concat([source[:, indices, :], (1 - source[:, indices, :].sum(1)).unsqueeze(1)], dim=1), 
+            class_token=model.mae_encoder.cls_token is not None
+        ) 
+        
+        # Plot the mask image
+        ax.imshow(mask_img)
+        
+        # Store the figure in the dictionary with a unique key
+        figs[f"reconstructed_{i}"] = fig
+        
+        i += 1
+    return figs
+
+
+
+
+
+
 
 if __name__ == "__main__":
     train()
