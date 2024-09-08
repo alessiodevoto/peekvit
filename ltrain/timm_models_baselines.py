@@ -345,7 +345,7 @@ class MAEVisionTransformer(torch.nn.Module):
             "reconstruction_loss": reconstruction_loss,
             "classification_loss": classification_loss,
             "class_preds": class_preds,
-            "reconstructed_image": self.unpatchify(pred_pathces) if self.reconstruct_images == True else None,
+            "reconstructed_image": None, #self.unpatchify(pred_pathces) if self.reconstruct_images == True else None,
         }
         return output_dict
     

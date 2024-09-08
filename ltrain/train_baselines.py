@@ -337,8 +337,8 @@ def train(cfg: DictConfig):
     # Delete all checkpoints except the best one
     checkpoint_dir = os.path.join(path_to_run, "checkpoints")
     for file in os.listdir(checkpoint_dir):
-        #if file.endswith(".pth") and file != best_model_path.split('/')[-1]:
-        os.remove(os.path.join(checkpoint_dir, file))
+        if file.endswith(".pth") and file != best_model_path.split('/')[-1]:
+            os.remove(os.path.join(checkpoint_dir, file))
 
 
 

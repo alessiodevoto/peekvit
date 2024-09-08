@@ -42,7 +42,7 @@
 
 
 project_name="6g_4rd_September"
-encoding_dims=(58 135)
+encoding_dims=(163)
 train_classifier_separetely_options=(False)
 train_snr_dbs=(0 random)
 
@@ -53,25 +53,36 @@ for encoding_dim in ${encoding_dims[@]}; do
 done
 
 
-# tome-ae-baseline
+project_name="6g_4rd_September"
+encoding_dims=(163)
 train_classifier_separetely_options=(False)
 train_snr_dbs=(0 random)
-rocinstruct_images_a=(True False)
-trace_losses=(True)
-encoding_dims=(135 173)
-r=([5,5,5,5,5,5] [30,30,30,30,30,30]) 
-
-for rec_img in ${rocinstruct_images_a[@]}; do
-    for train_snr in ${train_snr_dbs[@]}; do
-        for trace_loss in ${trace_losses[@]}; do
-            for encoding_dim in ${encoding_dims[@]}; do
-                for r_val in ${r[@]}; do
-                    python ltrain/train_baselines.py compressor=tome_ae compressor.encoding_dim=$encoding_dim train_classifier_separetely=False train_snr_db=$train_snr compressor.use_trace_loss=$trace_loss compressor.r=$r_val logger.wandb_project=$project_name model_type=paralel_models plot_groups=False reconstruct_images=$rec_img
-                done
-            done
-        done
-    done  
+for encoding_dim in ${encoding_dims[@]}; do
+        for train_snr in ${train_snr_dbs[@]}; do
+            python ltrain/train_baselines.py compressor=ae compressor.encoding_dim=$encoding_dim train_snr_db=$train_snr logger.wandb_project=$project_name model_type=paralel_models plot_groups=False reconstruct_images=True
+    done
 done
+
+
+# # tome-ae-baseline
+# train_classifier_separetely_options=(False)
+# train_snr_dbs=(0 random)
+# rocinstruct_images_a=(True False)
+# trace_losses=(True)
+# encoding_dims=(135 173)
+# r=([5,5,5,5,5,5] [30,30,30,30,30,30]) 
+
+# for rec_img in ${rocinstruct_images_a[@]}; do
+#     for train_snr in ${train_snr_dbs[@]}; do
+#         for trace_loss in ${trace_losses[@]}; do
+#             for encoding_dim in ${encoding_dims[@]}; do
+#                 for r_val in ${r[@]}; do
+#                     python ltrain/train_baselines.py compressor=tome_ae compressor.encoding_dim=$encoding_dim train_classifier_separetely=False train_snr_db=$train_snr compressor.use_trace_loss=$trace_loss compressor.r=$r_val logger.wandb_project=$project_name model_type=paralel_models plot_groups=False reconstruct_images=$rec_img
+#                 done
+#             done
+#         done
+#     done  
+# done
 
 
 # # tome-ae-baseline TAC 
