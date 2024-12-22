@@ -66,8 +66,8 @@ def make_vision_classifier(transformer_class):
             
             # Process
             x = self.forward_features(x)
-            x = self.forward_head(x)
-            return x
+            cls = self.forward_head(x)
+            return cls, x[:, 1:]
         
         def forward_features(self, x: torch.Tensor) -> torch.Tensor:
             x = self.blocks(x)

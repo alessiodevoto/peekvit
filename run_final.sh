@@ -13,6 +13,8 @@
 #     done  
 # done
 
+python ltrain/train_baselines.py compressor=tome train_classifier_separetely=False train_snr_db=random logger.wandb_project=6g_testing compressor.r=[5,5,5,5,5,5] plot_groups=False model_type=paralel_models reconstruct_images=False compressor.use_trace_loss=False
+
 
 # # tome-ae-baseline TACR
 # project_name="6g_4rd_September"

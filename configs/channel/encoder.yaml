@@ -1,0 +1,7 @@
+encoder:
+  _target_: ltrain.noise_block.BaseRealToComplexNN
+  input_size: ${compressor.input_dim}
+  output_size: ${compressor.encoding_dim}
+  n_layers: 1
+  normalize: Yes
+  drop_last_activation: Yes

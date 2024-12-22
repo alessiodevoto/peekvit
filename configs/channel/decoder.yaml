@@ -1,0 +1,7 @@
+decoder:
+    _target_: ltrain.noise_block.ConcatComplexToRealNN
+    input_size: ${compressor.encoding_dim}
+    output_size: ${compressor.input_dim}
+    n_layers: 1
+
+    

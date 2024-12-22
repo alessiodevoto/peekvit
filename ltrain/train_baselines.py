@@ -30,7 +30,7 @@ from peekvit.utils.losses import LossCompose
 
 from peekvit.utils.visualize import *
 import timm 
-import tome
+
 from timm_models_baselines import *
 import torch
 
@@ -57,6 +57,7 @@ def train(cfg: DictConfig):
     training_args = cfg.training
     dataset = instantiate(cfg.dataset)
     train_dataset, val_dataset = dataset.train_dataset, dataset.val_dataset
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=training_args.train_batch_size,
@@ -64,6 +65,7 @@ def train(cfg: DictConfig):
         num_workers=training_args.num_workers,
         pin_memory=True,
     )
+    
     val_loader = DataLoader(
         val_dataset,
         batch_size=training_args.eval_batch_size,
@@ -114,33 +116,33 @@ def train(cfg: DictConfig):
     if "scheduler" in cfg:
         scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
 
-    def plot_reconstructed_images_in_training(model, epoch, snr_db):
-        if epoch == -1:
-            epoch = "best"
+    # def plot_reconstructed_images_in_training(model, epoch, snr_db):
+    #     if epoch == -1:
+    #         epoch = "best"
 
-        subset_idcs = torch.arange(
-            0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
-        )
-        images_to_plot = Subset(val_dataset, subset_idcs)
+    #     subset_idcs = torch.arange(
+    #         0, len(val_dataset), len(val_dataset) // training_args["num_images_to_plot"]
+    #     )
+    #     images_to_plot = Subset(val_dataset, subset_idcs)
         
 
-        images = plot_reconstructed_images(
-            model,
-            images_to_plot,
-            model_transform=None,
-            visualization_transform=dataset.denormalize_transform,
-            snr_db=snr_db
-        )
+    #     images = plot_reconstructed_images(
+    #         model,
+    #         images_to_plot,
+    #         model_transform=None,
+    #         visualization_transform=dataset.denormalize_transform,
+    #         snr_db=snr_db
+    #     )
 
-        os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
-        os.makedirs(
-            f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}",
-            exist_ok=True,
-        )
-        for i, (_, img) in enumerate(images.items()):
-            img.savefig(
-                f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/reconstructed_img_{subset_idcs[i]}.png"
-            )
+    #     os.makedirs(f"{experiment_dir}/images/epoch_{epoch}", exist_ok=True)
+    #     os.makedirs(
+    #         f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}",
+    #         exist_ok=True,
+    #     )
+    #     for i, (_, img) in enumerate(images.items()):
+    #         img.savefig(
+    #             f"{experiment_dir}/images/epoch_{epoch}/reconstructed/{snr_db}/reconstructed_img_{subset_idcs[i]}.png"
+    #         )
     
     def plot_reconstructed_images_pergroup_in_training(model, epoch, snr_db):
         if epoch == -1:
@@ -317,8 +319,10 @@ def train(cfg: DictConfig):
 
         # plot_reconstructed_images_in_training(model, epoch=-1, snr_db=snr_db)
         # Plot per group
-    if cfg.plot_groups == True:
-        plot_reconstructed_images_pergroup_in_training(model, epoch=-1, snr_db=0)
+
+
+    # if cfg.plot_groups == True:
+    #     plot_reconstructed_images_pergroup_in_training(model, epoch=-1, snr_db=0)
 
             
     # Save the collected results into path_to_run
@@ -408,6 +412,7 @@ import numpy as np
 def make_mask_visualization(
     img, source: torch.Tensor, patch_size: int = 16, class_token: bool = True
 ):
+    import tome
     """
     Create a visualization like in the paper.
 
@@ -516,6 +521,8 @@ from scipy.ndimage import binary_erosion, binary_dilation
 #     vis_img = np.clip(vis_img, 0, 1)
 
 #     return vis_img
+
+
 
 
 def make_mask_visualization_pergroup(

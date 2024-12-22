@@ -1,5 +1,5 @@
-name: Tome+onlyclassifier
-r: [5,5,5,5,5,5]
+name: tome
+r: [8,8,8,8,8,8]
 use_trace_loss: False # No topology by def as no decoder
 input_dim: 192
 encoding_dim: 192
